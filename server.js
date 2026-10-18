@@ -12,7 +12,7 @@ app.use((req, res, next) => {
 });
 
 app.get("/", (req, res) => {
-  res.json({ status: "SEO Map API is running", version: "0.3.1" });
+  res.json({ status: "SEO Map API is running", version: "0.3.2" });
 });
 
 const businessCache = new Map();
@@ -73,11 +73,12 @@ app.get("/api/businesses", async (req, res) => {
     const searchedCity = place.name || city;
 
     // Smaller radius and fewer returned items reduce load on public OSM services.
-    const query = `[out:json][timeout:10];(nwr(around:1200,${lat},${lon})["name"]["website"];nwr(around:1200,${lat},${lon})["name"]["contact:website"];);out center tags 40;`;
+    const query = `[out:json][timeout:10];(nwr(around:700,${lat},${lon})["name"]["website"];nwr(around:700,${lat},${lon})["name"]["contact:website"];);out center tags 20;`;
 
     const endpoints = [
       "https://overpass-api.de/api/interpreter",
-      "https://overpass.private.coffee/api/interpreter"
+      "https://overpass.private.coffee/api/interpreter",
+      "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
     ];
 
     let overpassData = null;
@@ -154,7 +155,7 @@ app.get("/api/businesses", async (req, res) => {
         industry: String(industry).replace(/_/g, " ")
       });
 
-      if (businesses.length >= 40) break;
+      if (businesses.length >= 20) break;
     }
 
     const payload = {
