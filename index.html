@@ -1,0 +1,126 @@
+
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEO Map — Global Business Intelligence</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b1220;color:#edf2ff;font-family:Arial,sans-serif}
+header{padding:22px 5%;background:#111c30;border-bottom:1px solid #293750}
+.logo{font-size:25px;font-weight:bold}.logo span{color:#53e3ad}
+header p{color:#a8b6ce;margin-bottom:0}
+main{max-width:1500px;margin:auto;padding:25px}
+h1{font-size:30px}
+.sub{color:#a8b6ce}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}
+.stat,.panel{background:#121d31;border:1px solid #293750;border-radius:12px;padding:16px}
+.stat small{color:#a8b6ce}.stat strong{display:block;font-size:26px;margin-top:8px}
+.controls{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+input,select,button{padding:12px;border:1px solid #344662;border-radius:8px;background:#17243a;color:white;font-size:14px}
+input{flex:1;min-width:200px}
+button{cursor:pointer;background:#126b53}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px}
+#map{height:570px;border-radius:8px}
+h2{font-size:18px}
+.legend p{margin:12px 0;color:#c6d1e4;font-size:14px}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:8px}
+.company{padding:13px 0;border-top:1px solid #293750;cursor:pointer}
+.company:hover{color:#53e3ad}
+.company b{display:block;margin-bottom:5px}
+.muted{color:#a8b6ce;font-size:12px}
+.score{font-weight:bold;margin-top:5px}
+.note{font-size:12px;line-height:1.6;color:#a8b6ce}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#121d31;color:white}
+footer{padding:24px 0;color:#8494ae;font-size:12px}
+@media(max-width:800px){.layout{grid-template-columns:1fr}.stats{grid-template-columns:1fr}#map{height:420px}main{padding:14px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">SEO<span>MAP</span></div>
+  <p>Global Business Intelligence · Explore SEO worldwide</p>
+</header>
+<main>
+  <h1>Find businesses. Discover SEO opportunities.</h1>
+  <p class="sub">Udforsk virksomheder på verdenskortet, og sammenlign deres illustrative SEO-scorer.</p>
+  <section class="stats">
+    <div class="stat"><small>Virksomheder i demoen</small><strong id="total">12</strong></div>
+    <div class="stat"><small>Gennemsnitlig SEO-score</small><strong id="avg">—</strong></div>
+    <div class="stat"><small>Virksomheder med score 80+</small><strong id="good">—</strong></div>
+  </section>
+  <div class="controls">
+    <input id="search" placeholder="Søg efter virksomhed, by eller branche...">
+    <select id="region">
+      <option value="all">Hele verden</option>
+      <option value="Europe">Europa</option>
+      <option value="North America">Nordamerika</option>
+      <option value="Asia">Asien</option>
+      <option value="South America">Sydamerika</option>
+      <option value="Africa">Afrika</option>
+      <option value="Oceania">Oceanien</option>
+    </select>
+    <button id="reset">Nulstil filtre</button>
+  </div>
+  <section class="layout">
+    <div class="panel" style="padding:8px"><div id="map"></div></div>
+    <aside class="panel">
+      <h2>SEO-score</h2>
+      <div class="legend">
+        <p><span class="dot" style="background:#20c997"></span>80–100 · Stærk</p>
+        <p><span class="dot" style="background:#f5c451"></span>60–79 · Middel</p>
+        <p><span class="dot" style="background:#ff945e"></span>40–59 · Svag</p>
+        <p><span class="dot" style="background:#ff5364"></span>0–39 · Kritisk</p>
+      </div>
+      <h2>Virksomheder</h2>
+      <div id="list"></div>
+      <p class="note">Prototype med eksempeldata. Virksomhedsnavne og scorer er illustrative, ikke faktiske SEO-målinger.</p>
+    </aside>
+  </section>
+  <footer>SEO MAP · Prototype v0.1 · Kortdata © OpenStreetMap</footer>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const data=[
+{name:"Nordic Design",city:"Copenhagen",country:"Danmark",industry:"E-handel",region:"Europe",lat:55.676,lng:12.568,score:91},
+{name:"Berlin Digital",city:"Berlin",country:"Tyskland",industry:"Marketing",region:"Europe",lat:52.52,lng:13.405,score:76},
+{name:"London Studio",city:"London",country:"Storbritannien",industry:"Design",region:"Europe",lat:51.507,lng:-0.128,score:48},
+{name:"Paris Boutique",city:"Paris",country:"Frankrig",industry:"Mode",region:"Europe",lat:48.857,lng:2.352,score:67},
+{name:"New York Media",city:"New York",country:"USA",industry:"Medier",region:"North America",lat:40.713,lng:-74.006,score:86},
+{name:"San Francisco Tech",city:"San Francisco",country:"USA",industry:"Teknologi",region:"North America",lat:37.775,lng:-122.419,score:96},
+{name:"Toronto Market",city:"Toronto",country:"Canada",industry:"E-handel",region:"North America",lat:43.653,lng:-79.383,score:58},
+{name:"Tokyo Creative",city:"Tokyo",country:"Japan",industry:"Design",region:"Asia",lat:35.676,lng:139.65,score:82},
+{name:"Singapore Web",city:"Singapore",country:"Singapore",industry:"IT",region:"Asia",lat:1.352,lng:103.82,score:72},
+{name:"Sao Paulo Commerce",city:"Sao Paulo",country:"Brasilien",industry:"E-handel",region:"South America",lat:-23.551,lng:-46.633,score:39},
+{name:"Cape Town Agency",city:"Cape Town",country:"Sydafrika",industry:"Marketing",region:"Africa",lat:-33.925,lng:18.424,score:53},
+{name:"Sydney Online",city:"Sydney",country:"Australien",industry:"Digitale tjenester",region:"Oceania",lat:-33.869,lng:151.209,score:88}
+];
+const map=L.map("map").setView([25,10],2);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:'© OpenStreetMap contributors'}).addTo(map);
+let markers=[];
+function color(s){return s>=80?"#20c997":s>=60?"#f5c451":s>=40?"#ff945e":"#ff5364"}
+function render(){
+const q=document.getElementById("search").value.toLowerCase();
+const r=document.getElementById("region").value;
+const items=data.filter(b=>(r==="all"||b.region===r)&&[b.name,b.city,b.country,b.industry].join(" ").toLowerCase().includes(q));
+markers.forEach(m=>map.removeLayer(m.marker));markers=[];
+items.forEach(b=>{
+const marker=L.circleMarker([b.lat,b.lng],{radius:9,color:"#fff",weight:1,fillColor:color(b.score),fillOpacity:.95}).addTo(map);
+marker.bindPopup("<b>"+b.name+"</b><br>"+b.city+", "+b.country+"<br>"+b.industry+"<br>Demo SEO-score: <b>"+b.score+"/100</b>");
+markers.push({business:b,marker});
+});
+document.getElementById("list").innerHTML=items.map((b,i)=>'<div class="company" data-i="'+i+'"><b>'+b.name+'</b><span class="muted">'+b.city+' · '+b.industry+'</span><div class="score" style="color:'+color(b.score)+'">SEO-score: '+b.score+'/100</div></div>').join("")||'<p class="muted">Ingen resultater fundet.</p>';
+document.querySelectorAll(".company").forEach((el,i)=>el.addEventListener("click",()=>{map.setView([items[i].lat,items[i].lng],5);markers.find(m=>m.business===items[i])?.marker.openPopup()}));
+document.getElementById("total").textContent=items.length;
+document.getElementById("avg").textContent=items.length?Math.round(items.reduce((s,b)=>s+b.score,0)/items.length):"—";
+document.getElementById("good").textContent=items.filter(b=>b.score>=80).length;
+}
+document.getElementById("search").addEventListener("input",render);
+document.getElementById("region").addEventListener("change",render);
+document.getElementById("reset").addEventListener("click",()=>{document.getElementById("search").value="";document.getElementById("region").value="all";render();map.setView([25,10],2)});
+render();
+</script>
+</body>
+</html>
