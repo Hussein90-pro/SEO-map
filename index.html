@@ -1,41 +1,50 @@
-
 <!DOCTYPE html>
 <html lang="da">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Udforsk virksomheder på verdenskortet og analysér hjemmesiders SEO og performance med Google PageSpeed Insights.">
 <title>SEO Map — Global Business Intelligence</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#121d31;--panel2:#17243a;--border:#293750;--text:#edf2ff;--muted:#a8b6ce;--green:#53e3ad}
 *{box-sizing:border-box}
-body{margin:0;background:#0b1220;color:#edf2ff;font-family:Arial,sans-serif}
-header{padding:22px 5%;background:#111c30;border-bottom:1px solid #293750}
-.logo{font-size:25px;font-weight:bold}.logo span{color:#53e3ad}
-header p{color:#a8b6ce;margin-bottom:0}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,sans-serif}
+header{padding:22px 5%;background:#111c30;border-bottom:1px solid var(--border)}
+.logo{font-size:25px;font-weight:bold}.logo span{color:var(--green)}
+header p{color:var(--muted);margin-bottom:0}
 main{max-width:1500px;margin:auto;padding:25px}
-h1{font-size:30px}
-.sub{color:#a8b6ce}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}
-.stat,.panel{background:#121d31;border:1px solid #293750;border-radius:12px;padding:16px}
-.stat small{color:#a8b6ce}.stat strong{display:block;font-size:26px;margin-top:8px}
+h1{font-size:30px;margin-bottom:8px}
+h2{font-size:18px}
+.sub{color:var(--muted);line-height:1.5}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:22px 0}
+.stat,.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+.stat small{color:var(--muted)}.stat strong{display:block;font-size:26px;margin-top:8px;overflow-wrap:anywhere}
 .controls{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
-input,select,button{padding:12px;border:1px solid #344662;border-radius:8px;background:#17243a;color:white;font-size:14px}
+input,select,button{padding:12px;border:1px solid #344662;border-radius:8px;background:var(--panel2);color:white;font-size:14px}
 input{flex:1;min-width:200px}
-button{cursor:pointer;background:#126b53}
+button{cursor:pointer;background:#126b53;border-color:#197b61}
+button:hover{background:#168464}
+button:disabled{opacity:.65;cursor:wait}
 .layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px}
 #map{height:570px;border-radius:8px}
-h2{font-size:18px}
 .legend p{margin:12px 0;color:#c6d1e4;font-size:14px}
 .dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:8px}
-.company{padding:13px 0;border-top:1px solid #293750;cursor:pointer}
-.company:hover{color:#53e3ad}
+.company{padding:13px 0;border-top:1px solid var(--border);cursor:pointer}
+.company:hover{color:var(--green)}
 .company b{display:block;margin-bottom:5px}
-.muted{color:#a8b6ce;font-size:12px}
+.muted{color:var(--muted);font-size:12px}
 .score{font-weight:bold;margin-top:5px}
-.note{font-size:12px;line-height:1.6;color:#a8b6ce}
-.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#121d31;color:white}
+.note{font-size:12px;line-height:1.6;color:var(--muted)}
+.status{min-height:18px;font-size:13px;line-height:1.5;color:var(--muted)}
+.result-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.result-grid .stat{margin:0}
+.result-link{color:var(--green);overflow-wrap:anywhere}
+.result-details{padding:12px;border:1px solid var(--border);border-radius:8px;margin-top:12px;background:#0e1829}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:white}
+.leaflet-popup-content{line-height:1.6}
 footer{padding:24px 0;color:#8494ae;font-size:12px}
-@media(max-width:800px){.layout{grid-template-columns:1fr}.stats{grid-template-columns:1fr}#map{height:420px}main{padding:14px}}
+@media(max-width:800px){.layout{grid-template-columns:1fr}.stats{grid-template-columns:1fr}.result-grid{grid-template-columns:1fr}#map{height:420px}main{padding:14px}h1{font-size:25px}}
 </style>
 </head>
 <body>
@@ -45,15 +54,44 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
 </header>
 <main>
   <h1>Find businesses. Discover SEO opportunities.</h1>
-  <p class="sub">Udforsk virksomheder på verdenskortet, og sammenlign deres illustrative SEO-scorer.</p>
-  <section class="stats">
-    <div class="stat"><small>Virksomheder i demoen</small><strong id="total">12</strong></div>
-    <div class="stat"><small>Gennemsnitlig SEO-score</small><strong id="avg">—</strong></div>
-    <div class="stat"><small>Virksomheder med score 80+</small><strong id="good">—</strong></div>
+  <p class="sub">Analysér en hjemmeside med Google PageSpeed Insights, og udforsk eksempelvirksomheder på verdenskortet.</p>
+
+  <section class="panel" style="margin-bottom:16px" aria-labelledby="businessSearchHeading">
+    <h2 id="businessSearchHeading">Find rigtige virksomheder</h2>
+    <p class="sub">Søg på en by, fx Aarhus, København eller London. Vi finder virksomheder med registrerede hjemmesider i OpenStreetMap.</p>
+    <form id="businessSearchForm">
+      <div class="controls">
+        <input id="businessCity" type="text" placeholder="Søg efter by, fx Aarhus eller London" aria-label="By til virksomhedssøgning" required>
+        <button id="businessSearchButton" type="submit">Find virksomheder</button>
+      </div>
+    </form>
+    <p id="businessSearchStatus" class="status" role="status" aria-live="polite"></p>
+    <p class="note">Prototype: Resultater afhænger af, hvilke virksomhedsoplysninger der er registreret i OpenStreetMap. Ikke alle virksomheder er med.</p>
   </section>
+
+  <section class="panel" aria-labelledby="analyzerHeading">
+    <h2 id="analyzerHeading">Analyser en hjemmeside</h2>
+    <p class="sub">Indtast en hjemmesideadresse for at hente en SEO-score og en performance-score fra Google. Analysen køres på mobilvisning.</p>
+    <form id="analyzerForm">
+      <div class="controls">
+        <input id="websiteUrl" type="text" inputmode="url" autocomplete="url" placeholder="https://eksempel.dk" aria-label="Hjemmesideadresse" required>
+        <button id="analyzeButton" type="submit">Analyser hjemmeside</button>
+      </div>
+    </form>
+    <p id="analysisStatus" class="status" role="status" aria-live="polite"></p>
+    <div id="analysisResult"></div>
+    <p class="note">SEO-score og performance-score er separate målinger. De fortæller ikke alene, hvor godt en hjemmeside rangerer i Googles søgeresultater.</p>
+  </section>
+
+  <section class="stats" aria-label="Kortstatistik">
+    <div class="stat"><small>Virksomheder i demoen</small><strong id="total">12</strong></div>
+    <div class="stat"><small>Gennemsnitlig demo-score</small><strong id="avg">—</strong></div>
+    <div class="stat"><small>Demo-virksomheder med score 80+</small><strong id="good">—</strong></div>
+  </section>
+
   <div class="controls">
-    <input id="search" placeholder="Søg efter virksomhed, by eller branche...">
-    <select id="region">
+    <input id="search" placeholder="Søg efter virksomhed, by eller branche..." aria-label="Søg i demo-virksomheder">
+    <select id="region" aria-label="Filtrér efter region">
       <option value="all">Hele verden</option>
       <option value="Europe">Europa</option>
       <option value="North America">Nordamerika</option>
@@ -62,12 +100,13 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
       <option value="Africa">Afrika</option>
       <option value="Oceania">Oceanien</option>
     </select>
-    <button id="reset">Nulstil filtre</button>
+    <button id="reset" type="button">Nulstil filtre</button>
   </div>
+
   <section class="layout">
-    <div class="panel" style="padding:8px"><div id="map"></div></div>
+    <div class="panel" style="padding:8px"><div id="map" aria-label="Verdenskort med eksempelvirksomheder"></div></div>
     <aside class="panel">
-      <h2>SEO-score</h2>
+      <h2>SEO-score – farveforklaring</h2>
       <div class="legend">
         <p><span class="dot" style="background:#20c997"></span>80–100 · Stærk</p>
         <p><span class="dot" style="background:#f5c451"></span>60–79 · Middel</p>
@@ -76,50 +115,316 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
       </div>
       <h2>Virksomheder</h2>
       <div id="list"></div>
-      <p class="note">Prototype med eksempeldata. Virksomhedsnavne og scorer er illustrative, ikke faktiske SEO-målinger.</p>
+      <p class="note">Demoen viser eksempeldata. Brug “Find rigtige virksomheder” for at hente registrerede virksomheder; deres SEO-score beregnes først, når du analyserer hjemmesiden.</p>
     </aside>
   </section>
-  <footer>SEO MAP · Prototype v0.1 · Kortdata © OpenStreetMap</footer>
+  <footer>SEO MAP · Prototype v0.3 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
 </main>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const data=[
-{name:"Nordic Design",city:"Copenhagen",country:"Danmark",industry:"E-handel",region:"Europe",lat:55.676,lng:12.568,score:91},
-{name:"Berlin Digital",city:"Berlin",country:"Tyskland",industry:"Marketing",region:"Europe",lat:52.52,lng:13.405,score:76},
-{name:"London Studio",city:"London",country:"Storbritannien",industry:"Design",region:"Europe",lat:51.507,lng:-0.128,score:48},
-{name:"Paris Boutique",city:"Paris",country:"Frankrig",industry:"Mode",region:"Europe",lat:48.857,lng:2.352,score:67},
-{name:"New York Media",city:"New York",country:"USA",industry:"Medier",region:"North America",lat:40.713,lng:-74.006,score:86},
-{name:"San Francisco Tech",city:"San Francisco",country:"USA",industry:"Teknologi",region:"North America",lat:37.775,lng:-122.419,score:96},
-{name:"Toronto Market",city:"Toronto",country:"Canada",industry:"E-handel",region:"North America",lat:43.653,lng:-79.383,score:58},
-{name:"Tokyo Creative",city:"Tokyo",country:"Japan",industry:"Design",region:"Asia",lat:35.676,lng:139.65,score:82},
-{name:"Singapore Web",city:"Singapore",country:"Singapore",industry:"IT",region:"Asia",lat:1.352,lng:103.82,score:72},
-{name:"Sao Paulo Commerce",city:"Sao Paulo",country:"Brasilien",industry:"E-handel",region:"South America",lat:-23.551,lng:-46.633,score:39},
-{name:"Cape Town Agency",city:"Cape Town",country:"Sydafrika",industry:"Marketing",region:"Africa",lat:-33.925,lng:18.424,score:53},
-{name:"Sydney Online",city:"Sydney",country:"Australien",industry:"Digitale tjenester",region:"Oceania",lat:-33.869,lng:151.209,score:88}
+"use strict";
+
+const API_BASE = "https://seo-map-api.onrender.com";
+
+const demoData = [
+  {name:"Nordic Design",city:"Copenhagen",country:"Danmark",industry:"E-handel",region:"Europe",lat:55.676,lng:12.568,score:91},
+  {name:"Berlin Digital",city:"Berlin",country:"Tyskland",industry:"Marketing",region:"Europe",lat:52.52,lng:13.405,score:76},
+  {name:"London Studio",city:"London",country:"Storbritannien",industry:"Design",region:"Europe",lat:51.507,lng:-0.128,score:48},
+  {name:"Paris Boutique",city:"Paris",country:"Frankrig",industry:"Mode",region:"Europe",lat:48.857,lng:2.352,score:67},
+  {name:"New York Media",city:"New York",country:"USA",industry:"Medier",region:"North America",lat:40.713,lng:-74.006,score:86},
+  {name:"San Francisco Tech",city:"San Francisco",country:"USA",industry:"Teknologi",region:"North America",lat:37.775,lng:-122.419,score:96},
+  {name:"Toronto Market",city:"Toronto",country:"Canada",industry:"E-handel",region:"North America",lat:43.653,lng:-79.383,score:58},
+  {name:"Tokyo Creative",city:"Tokyo",country:"Japan",industry:"Design",region:"Asia",lat:35.676,lng:139.65,score:82},
+  {name:"Singapore Web",city:"Singapore",country:"Singapore",industry:"IT",region:"Asia",lat:1.352,lng:103.82,score:72},
+  {name:"Sao Paulo Commerce",city:"Sao Paulo",country:"Brasilien",industry:"E-handel",region:"South America",lat:-23.551,lng:-46.633,score:39},
+  {name:"Cape Town Agency",city:"Cape Town",country:"Sydafrika",industry:"Marketing",region:"Africa",lat:-33.925,lng:18.424,score:53},
+  {name:"Sydney Online",city:"Sydney",country:"Australien",industry:"Digitale tjenester",region:"Oceania",lat:-33.869,lng:151.209,score:88}
 ];
-const map=L.map("map").setView([25,10],2);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:'© OpenStreetMap contributors'}).addTo(map);
-let markers=[];
-function color(s){return s>=80?"#20c997":s>=60?"#f5c451":s>=40?"#ff945e":"#ff5364"}
-function render(){
-const q=document.getElementById("search").value.toLowerCase();
-const r=document.getElementById("region").value;
-const items=data.filter(b=>(r==="all"||b.region===r)&&[b.name,b.city,b.country,b.industry].join(" ").toLowerCase().includes(q));
-markers.forEach(m=>map.removeLayer(m.marker));markers=[];
-items.forEach(b=>{
-const marker=L.circleMarker([b.lat,b.lng],{radius:9,color:"#fff",weight:1,fillColor:color(b.score),fillOpacity:.95}).addTo(map);
-marker.bindPopup("<b>"+b.name+"</b><br>"+b.city+", "+b.country+"<br>"+b.industry+"<br>Demo SEO-score: <b>"+b.score+"/100</b>");
-markers.push({business:b,marker});
-});
-document.getElementById("list").innerHTML=items.map((b,i)=>'<div class="company" data-i="'+i+'"><b>'+b.name+'</b><span class="muted">'+b.city+' · '+b.industry+'</span><div class="score" style="color:'+color(b.score)+'">SEO-score: '+b.score+'/100</div></div>').join("")||'<p class="muted">Ingen resultater fundet.</p>';
-document.querySelectorAll(".company").forEach((el,i)=>el.addEventListener("click",()=>{map.setView([items[i].lat,items[i].lng],5);markers.find(m=>m.business===items[i])?.marker.openPopup()}));
-document.getElementById("total").textContent=items.length;
-document.getElementById("avg").textContent=items.length?Math.round(items.reduce((s,b)=>s+b.score,0)/items.length):"—";
-document.getElementById("good").textContent=items.filter(b=>b.score>=80).length;
+let data = demoData;
+let realBusinessMode = false;
+
+const map = L.map("map").setView([25,10],2);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution:'© OpenStreetMap contributors',
+  maxZoom:19
+}).addTo(map);
+
+let markers = [];
+
+function color(score) {
+  if (typeof score !== "number") return "#8b9bb4";
+  return score >= 80 ? "#20c997" :
+         score >= 60 ? "#f5c451" :
+         score >= 40 ? "#ff945e" : "#ff5364";
 }
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, character => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+  }[character]));
+}
+
+function render() {
+  const q = document.getElementById("search").value.toLowerCase().trim();
+  const r = document.getElementById("region").value;
+  const items = data.filter(b =>
+    (r === "all" || b.region === r) &&
+    [b.name,b.city,b.country,b.industry].join(" ").toLowerCase().includes(q)
+  );
+
+  markers.forEach(m => map.removeLayer(m.marker));
+  markers = [];
+
+  items.forEach(b => {
+    const marker = L.circleMarker([b.lat,b.lng], {
+      radius:9,color:"#fff",weight:1,fillColor:color(b.score),fillOpacity:.95
+    }).addTo(map);
+
+    const scoreText = typeof b.score === "number"
+      ? (realBusinessMode ? "SEO-score: <b>" + b.score + "/100</b>" : "Illustrativ demo-score: <b>" + b.score + "/100</b>")
+      : "SEO-score: <b>Ikke analyseret endnu</b>";
+    const websiteLink = b.website
+      ? '<br><a class="result-link" href="' + escapeHtml(b.website) + '" target="_blank" rel="noopener noreferrer">Åbn hjemmeside</a>'
+      : "";
+    const analyzeButton = (realBusinessMode && b.website)
+      ? '<br><button type="button" class="popup-analyze" data-business-id="' + escapeHtml(b.id) + '">Analyser SEO</button>'
+      : "";
+    const contact = [
+      b.phone ? "Telefon: " + escapeHtml(b.phone) : "",
+      b.email ? "E-mail: " + escapeHtml(b.email) : ""
+    ].filter(Boolean).join("<br>");
+    marker.bindPopup(
+      "<b>" + escapeHtml(b.name) + "</b><br>" +
+      escapeHtml(b.city || "") + (b.country ? ", " + escapeHtml(b.country) : "") + "<br>" +
+      escapeHtml(b.industry || "Branche ikke oplyst") + "<br>" +
+      scoreText + websiteLink + analyzeButton + (contact ? "<br>" + contact : "")
+    );
+    markers.push({business:b,marker});
+  });
+
+  document.getElementById("list").innerHTML = items.map((b,i) =>
+    '<div class="company" data-i="' + i + '" tabindex="0" role="button">' +
+      '<b>' + escapeHtml(b.name) + '</b>' +
+      '<span class="muted">' + escapeHtml(b.city) + ' · ' + escapeHtml(b.industry) + '</span>' +
+      '<div class="score" style="color:' + color(b.score) + '">' +
+        (typeof b.score === "number" ? (realBusinessMode ? 'SEO-score: ' : 'Demo SEO-score: ') + b.score + '/100' : 'SEO-score: Ikke analyseret') +
+      '</div>' +
+    '</div>'
+  ).join("") || '<p class="muted">Ingen resultater fundet.</p>';
+
+  document.querySelectorAll(".company").forEach((el,i) => {
+    const openCompany = () => {
+      map.setView([items[i].lat,items[i].lng],5);
+      const found = markers.find(m => m.business === items[i]);
+      if (found) found.marker.openPopup();
+    };
+    el.addEventListener("click",openCompany);
+    el.addEventListener("keydown",event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openCompany();
+      }
+    });
+  });
+
+  document.getElementById("total").textContent = items.length;
+  document.querySelector(".stats .stat:nth-child(1) small").textContent = realBusinessMode ? "Virksomheder fundet" : "Virksomheder i demoen";
+  document.querySelector(".stats .stat:nth-child(2) small").textContent = realBusinessMode ? "Gennemsnitlig SEO-score" : "Gennemsnitlig demo-score";
+  document.querySelector(".stats .stat:nth-child(3) small").textContent = realBusinessMode ? "Virksomheder med score 80+" : "Demo-virksomheder med score 80+";
+  const scored = items.filter(b => typeof b.score === "number");
+  document.getElementById("avg").textContent = scored.length
+    ? Math.round(scored.reduce((sum,b) => sum + b.score,0) / scored.length)
+    : "—";
+  document.getElementById("good").textContent = scored.filter(b => b.score >= 80).length;
+}
+
 document.getElementById("search").addEventListener("input",render);
 document.getElementById("region").addEventListener("change",render);
-document.getElementById("reset").addEventListener("click",()=>{document.getElementById("search").value="";document.getElementById("region").value="all";render();map.setView([25,10],2)});
+document.getElementById("reset").addEventListener("click",() => {
+  document.getElementById("search").value = "";
+  document.getElementById("region").value = "all";
+  render();
+  map.setView([25,10],2);
+});
+
+
+document.getElementById("businessSearchForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const city = document.getElementById("businessCity").value.trim();
+  const status = document.getElementById("businessSearchStatus");
+  const button = document.getElementById("businessSearchButton");
+  if (!city) return;
+
+  button.disabled = true;
+  button.textContent = "Søger...";
+  status.textContent = "Søger efter virksomheder. Det kan tage lidt tid...";
+  try {
+    const response = await fetch(API_BASE + "/api/businesses?city=" + encodeURIComponent(city));
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Kunne ikke hente virksomheder.");
+    if (!Array.isArray(payload.businesses) || payload.businesses.length === 0) {
+      throw new Error("Ingen virksomheder med registreret hjemmeside blev fundet. Prøv en anden by.");
+    }
+
+    data = payload.businesses.map(b => ({
+      ...b,
+      score: null,
+      region: "all",
+      industry: b.industry || "Branche ikke oplyst"
+    }));
+    realBusinessMode = true;
+    document.getElementById("search").value = "";
+    document.getElementById("region").value = "all";
+    render();
+    map.fitBounds(L.latLngBounds(data.map(b => [b.lat,b.lng])), {padding:[25,25], maxZoom:12});
+    status.textContent = "Fandt " + data.length + " virksomheder nær " + (payload.searchedCity || city) +
+      ". Klik på en markør og vælg “Analyser SEO” for at måle hjemmesiden.";
+  } catch (error) {
+    status.textContent = error.message || "Der opstod en fejl ved virksomhedssøgningen.";
+  } finally {
+    button.disabled = false;
+    button.textContent = "Find virksomheder";
+  }
+});
+
+map.on("popupopen", event => {
+  const popupNode = event.popup.getElement();
+  const button = popupNode && popupNode.querySelector(".popup-analyze");
+  if (!button || button.dataset.bound === "1") return;
+  button.dataset.bound = "1";
+  button.addEventListener("click", async () => {
+    const business = data.find(b => String(b.id) === button.dataset.businessId);
+    if (!business || !business.website) return;
+    button.disabled = true;
+    button.textContent = "Analyserer...";
+    const status = document.getElementById("businessSearchStatus");
+    status.textContent = "Analyserer " + business.name + "...";
+    try {
+      const response = await fetch(API_BASE + "/api/seo?url=" + encodeURIComponent(business.website));
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "SEO-analysen mislykkedes.");
+      business.score = result.seoScore;
+      business.performanceScore = result.performanceScore;
+      business.fetchedAt = result.fetchedAt;
+      render();
+      const updated = markers.find(m => m.business === business);
+      if (updated) updated.marker.openPopup();
+      status.textContent = "SEO-analyse færdig for " + business.name + ": " +
+        (typeof business.score === "number" ? business.score + "/100" : "SEO-score ikke tilgængelig") + ".";
+    } catch (error) {
+      status.textContent = error.message || "Kunne ikke analysere virksomhedens hjemmeside.";
+      button.disabled = false;
+      button.textContent = "Prøv SEO-analyse igen";
+    }
+  });
+});
+
+document.getElementById("analyzerForm").addEventListener("submit",async event => {
+  event.preventDefault();
+
+  const input = document.getElementById("websiteUrl");
+  const status = document.getElementById("analysisStatus");
+  const result = document.getElementById("analysisResult");
+  const button = document.getElementById("analyzeButton");
+
+  let url;
+  let inputValue = input.value.trim();
+
+  if (inputValue && !/^https?:\/\//i.test(inputValue)) {
+    inputValue = "https://" + inputValue;
+  }
+
+  try {
+    url = new URL(inputValue);
+    if (!["http:","https:"].includes(url.protocol) || !url.hostname ||
+        url.username || url.password) {
+      throw new Error("Ugyldig hjemmesideadresse");
+    }
+  } catch {
+    status.textContent = "Indtast en gyldig adresse, fx https://example.com.";
+    result.replaceChildren();
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Analyserer...";
+  status.textContent = "Analysen er i gang. Første forespørgsel kan tage lidt længere tid, hvis serveren skal starte.";
+  result.replaceChildren();
+
+  try {
+    const endpoint = API_BASE + "/api/seo?url=" + encodeURIComponent(url.href);
+    const response = await fetch(endpoint);
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("Serveren returnerede et ugyldigt svar. Prøv igen om lidt.");
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || "Analysen kunne ikke gennemføres.");
+    }
+
+    const grid = document.createElement("div");
+    grid.className = "result-grid";
+
+    function addScoreCard(label,score) {
+      const card = document.createElement("div");
+      card.className = "stat";
+      const small = document.createElement("small");
+      small.textContent = label;
+      const strong = document.createElement("strong");
+      if (typeof score === "number") {
+        strong.textContent = score + "/100";
+        strong.style.color = color(score);
+      } else {
+        strong.textContent = "Ikke tilgængelig";
+        strong.style.fontSize = "18px";
+        strong.style.color = "#a8b6ce";
+      }
+      card.append(small,strong);
+      grid.append(card);
+    }
+
+    addScoreCard("Google SEO-score",data.seoScore);
+    addScoreCard("Google performance-score",data.performanceScore);
+
+    const details = document.createElement("div");
+    details.className = "result-details";
+    const websiteLabel = document.createElement("p");
+    websiteLabel.className = "note";
+    websiteLabel.textContent = "Analyseret hjemmeside: ";
+    const link = document.createElement("a");
+    link.className = "result-link";
+    link.href = data.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = data.url;
+    websiteLabel.append(link);
+
+    const time = document.createElement("p");
+    time.className = "note";
+    const parsedDate = new Date(data.fetchedAt);
+    time.textContent = "Analyseret: " +
+      (Number.isNaN(parsedDate.getTime()) ? "tidspunkt ikke oplyst" : parsedDate.toLocaleString("da-DK"));
+
+    const mobile = document.createElement("p");
+    mobile.className = "note";
+    mobile.textContent = "Målingen er udført med Googles mobilbaserede Lighthouse-analyse.";
+
+    details.append(websiteLabel,time,mobile);
+    result.append(grid,details);
+    status.textContent = "Analysen er gennemført.";
+  } catch (error) {
+    status.textContent = error.message ||
+      "Kunne ikke få forbindelse til analyse-serveren. Prøv igen om lidt.";
+  } finally {
+    button.disabled = false;
+    button.textContent = "Analyser hjemmeside";
+  }
+});
+
 render();
 </script>
 </body>
