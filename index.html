@@ -150,10 +150,19 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
       <p id="detailExplanation" class="sub"></p>
       <p class="note">SEO-score fra Lighthouse er en teknisk måling af hjemmesidens SEO-kontroller – ikke virksomhedens faktiske Google-placering, trafik eller omsætning. Disse data kræver separate datakilder eller adgang fra virksomheden.</p>
     </div>
+    <div class="detail-section">
+      <h2>Forbedringsmuligheder</h2>
+      <div id="improvementList" class="result-details"></div>
+    </div>
+    <div class="detail-section">
+      <h2>SEO-historik</h2>
+      <p id="historyStatus" class="note">Historikken vises, når hjemmesiden er overvåget.</p>
+      <div id="monitorHistory" class="result-details"></div>
+    </div>
     <p id="monitorStatus" class="status" role="status" aria-live="polite">SEO-overvågning er ikke startet.</p>
     <div class="detail-actions" id="detailActions"></div>
   </section>
-  <footer>SEO MAP · Prototype v0.8 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
+  <footer>SEO MAP · Prototype v1.0 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -311,6 +320,10 @@ async function refreshMonitoredScores() {
         business.fetchedAt = latest.fetchedAt;
         changed = true;
       }
+      if (site.lastCheckedAt && business.lastCheckedAt !== site.lastCheckedAt) {
+        business.lastCheckedAt = site.lastCheckedAt;
+        changed = true;
+      }
     }
 
     if (changed) {
@@ -326,6 +339,78 @@ async function refreshMonitoredScores() {
     console.warn("SEO-monitorering kunne ikke synkroniseres:", error);
   } finally {
     monitorPollInProgress = false;
+  }
+}
+
+function renderImprovementSuggestions(business) {
+  const target = document.getElementById("improvementList");
+  if (!target) return;
+  target.replaceChildren();
+  const suggestions = [];
+  if (typeof business.score !== "number") {
+    suggestions.push("Kør en SEO-analyse for at få konkrete tekniske signaler.");
+  } else if (business.score < 50) {
+    suggestions.push("Start med grundlæggende SEO: sidetitler, metabeskrivelser, indeksering og tydelige links.");
+  } else if (business.score < 80) {
+    suggestions.push("Gennemgå de SEO-kontroller, Lighthouse markerer som fejl eller advarsler, og ret dem prioriteret.");
+  } else {
+    suggestions.push("SEO-kontrollen ser stærk ud. Kontrollér stadig indeksering, strukturerede data og lokal søgesynlighed separat.");
+  }
+  if (typeof business.performanceScore === "number" && business.performanceScore < 70) {
+    suggestions.push("Performance er under 70. Undersøg store billeder, JavaScript, render-blokerende ressourcer og serverens svartid.");
+  }
+  if (typeof business.performanceScore === "number" && business.performanceScore >= 90) {
+    suggestions.push("Performance-scoren er høj. Følg med i, om den holder sig stabil ved senere målinger.");
+  }
+  suggestions.push("Brug Google Search Console-data til at vurdere faktiske søgeord, klik og visninger; Lighthouse-score er ikke en Google-placering.");
+  const list = document.createElement("ul");
+  list.style.margin = "0"; list.style.paddingLeft = "20px"; list.style.lineHeight = "1.7";
+  suggestions.forEach(item => { const li = document.createElement("li"); li.textContent = item; list.append(li); });
+  target.append(list);
+}
+
+async function loadMonitorHistory(business) {
+  const target = document.getElementById("monitorHistory");
+  const status = document.getElementById("historyStatus");
+  if (!target || !status) return;
+  target.replaceChildren();
+  if (!business || !business.monitorId) {
+    status.textContent = "Start SEO-overvågning for at gemme fremtidige målinger og se historikken her.";
+    target.textContent = "Ingen overvågningshistorik endnu.";
+    return;
+  }
+  status.textContent = "Henter gemte målinger…";
+  try {
+    const response = await fetch(API_BASE + "/api/monitor/" + encodeURIComponent(business.monitorId), { cache: "no-store" });
+    const detail = await response.json();
+    if (!response.ok) throw new Error(detail.error || "Kunne ikke hente historik.");
+    const history = Array.isArray(detail.history) ? detail.history : [];
+    const latest = detail.latest || null;
+    if (latest) {
+      if (typeof latest.seoScore === "number") business.score = latest.seoScore;
+      if (typeof latest.performanceScore === "number") business.performanceScore = latest.performanceScore;
+      if (latest.fetchedAt) business.fetchedAt = latest.fetchedAt;
+      if (detail.lastCheckedAt) business.lastCheckedAt = detail.lastCheckedAt;
+    }
+    status.textContent = history.length + " gemt(e) måling(er) · seneste kontrol: " + (detail.lastCheckedAt ? new Date(detail.lastCheckedAt).toLocaleString("da-DK") : "ikke udført endnu");
+    if (!history.length) { target.textContent = "Overvågningen er registreret, men der er endnu ikke gemt en måling. Kør en manuel kontrol for at starte historikken."; return; }
+    const sorted = history.slice().reverse().slice(0, 10);
+    const table = document.createElement("table");
+    table.style.width = "100%"; table.style.borderCollapse = "collapse"; table.style.fontSize = "13px";
+    const head = document.createElement("tr");
+    ["Tidspunkt", "SEO", "Performance"].forEach(label => { const th = document.createElement("th"); th.textContent = label; th.style.textAlign = "left"; th.style.padding = "8px 5px"; th.style.borderBottom = "1px solid #293750"; head.append(th); });
+    table.append(head);
+    sorted.forEach(item => {
+      const tr = document.createElement("tr");
+      const date = new Date(item.fetchedAt);
+      const values = [Number.isNaN(date.getTime()) ? "Tidspunkt ukendt" : date.toLocaleString("da-DK"), typeof item.seoScore === "number" ? item.seoScore + "/100" : "—", typeof item.performanceScore === "number" ? item.performanceScore + "/100" : "—"];
+      values.forEach((value, index) => { const td = document.createElement("td"); td.textContent = value; td.style.padding = "8px 5px"; td.style.borderBottom = "1px solid #293750"; if (index === 1 && typeof item.seoScore === "number") td.style.color = color(item.seoScore); tr.append(td); });
+      table.append(tr);
+    });
+    target.append(table);
+  } catch (error) {
+    status.textContent = "Historikken kunne ikke hentes lige nu.";
+    target.textContent = error.message || "Prøv igen senere.";
   }
 }
 
@@ -348,7 +433,7 @@ function showBusinessDetails(business) {
   const cards = [
     ["SEO-score", hasSeo ? business.score + "/100" : "Ikke analyseret", hasSeo ? color(business.score) : "#a8b6ce"],
     ["Performance", hasPerformance ? business.performanceScore + "/100" : "Ikke målt", hasPerformance ? color(business.performanceScore) : "#a8b6ce"],
-    ["Senest analyseret", business.fetchedAt ? new Date(business.fetchedAt).toLocaleString("da-DK") : "Ingen måling", "#edf2ff"]
+    ["Senest kontrolleret", (business.lastCheckedAt || business.fetchedAt) ? new Date(business.lastCheckedAt || business.fetchedAt).toLocaleString("da-DK") : "Ingen måling", "#edf2ff"]
   ];
   cards.forEach(([label, value, tint]) => {
     const card = document.createElement("div");
@@ -382,6 +467,9 @@ function showBusinessDetails(business) {
         ? "Lighthouse har fundet plads til tekniske SEO-forbedringer. Scoren viser ikke i sig selv virksomhedens placeringer i Google."
         : "Lighthouse indikerer, at hjemmesiden kan have tekniske SEO-forbedringer. Resultatet bør følges op med konkrete kontroller og data om Google-synlighed.";
   }
+
+  renderImprovementSuggestions(business);
+  loadMonitorHistory(business);
 
   const actions = document.getElementById("detailActions");
   actions.replaceChildren();
