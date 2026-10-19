@@ -150,6 +150,7 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
       <p id="detailExplanation" class="sub"></p>
       <p class="note">SEO-score fra Lighthouse er en teknisk måling af hjemmesidens SEO-kontroller – ikke virksomhedens faktiske Google-placering, trafik eller omsætning. Disse data kræver separate datakilder eller adgang fra virksomheden.</p>
     </div>
+    <p id="monitorStatus" class="status" role="status" aria-live="polite">SEO-overvågning er ikke startet.</p>
     <div class="detail-actions" id="detailActions"></div>
   </section>
   <footer>SEO MAP · Prototype v0.4 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
@@ -188,6 +189,98 @@ function addDetailRow(container, label, value) {
   right.textContent = value || "Ikke tilgængelig";
   row.append(left, right);
   container.append(row);
+}
+
+
+const MONITOR_POLL_INTERVAL_MS = 60000;
+let monitorPollInProgress = false;
+
+function websiteKey(value) {
+  try {
+    const url = new URL(/^https?:\/\//i.test(String(value || "")) ? value : "https://" + value);
+    return (url.hostname || "").toLowerCase().replace(/^www\./, "") +
+      (url.pathname || "/").replace(/\/+$/, "").toLowerCase();
+  } catch {
+    return String(value || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  }
+}
+
+async function startMonitoring(business, button) {
+  if (!business || !business.website) return;
+  const status = document.getElementById("monitorStatus");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Starter overvågning...";
+  }
+  if (status) status.textContent = "Tilføjer " + business.name + " til periodisk SEO-overvågning...";
+  try {
+    const response = await fetch(API_BASE + "/api/monitor", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: business.website })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Kunne ikke starte SEO-overvågning.");
+    business.monitorId = payload.id;
+    business.isMonitored = true;
+    if (status) status.textContent = "Overvågning aktiv. Serveren kontrollerer hjemmesiden periodisk; kortet synkroniseres automatisk.";
+    await refreshMonitoredScores();
+    showBusinessDetails(business);
+  } catch (error) {
+    if (status) status.textContent = error.message || "Kunne ikke starte SEO-overvågning.";
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Prøv at starte overvågning igen";
+    }
+  }
+}
+
+async function refreshMonitoredScores() {
+  if (monitorPollInProgress) return;
+  monitorPollInProgress = true;
+  try {
+    const response = await fetch(API_BASE + "/api/monitor", { cache: "no-store" });
+    if (!response.ok) return;
+    const payload = await response.json();
+    const sites = Array.isArray(payload.sites) ? payload.sites : [];
+    let changed = false;
+
+    for (const business of data) {
+      if (!business.website) continue;
+      const site = sites.find(item => websiteKey(item.url) === websiteKey(business.website));
+      if (!site) continue;
+      business.isMonitored = true;
+      business.monitorId = site.id;
+      const latest = site.latest;
+      if (!latest) continue;
+      if (typeof latest.seoScore === "number" && business.score !== latest.seoScore) {
+        business.score = latest.seoScore;
+        changed = true;
+      }
+      if (typeof latest.performanceScore === "number" && business.performanceScore !== latest.performanceScore) {
+        business.performanceScore = latest.performanceScore;
+        changed = true;
+      }
+      if (latest.fetchedAt && business.fetchedAt !== latest.fetchedAt) {
+        business.fetchedAt = latest.fetchedAt;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      render();
+      if (selectedBusiness) {
+        const selected = data.find(item => item === selectedBusiness ||
+          (item.website && selectedBusiness.website && websiteKey(item.website) === websiteKey(selectedBusiness.website)));
+        if (selected) showBusinessDetails(selected);
+      }
+    }
+  } catch (error) {
+    // A temporary network failure should not break the map; the next poll retries.
+    console.warn("SEO-monitorering kunne ikke synkroniseres:", error);
+  } finally {
+    monitorPollInProgress = false;
+  }
 }
 
 function showBusinessDetails(business) {
@@ -255,6 +348,23 @@ function showBusinessDetails(business) {
     link.textContent = "Åbn hjemmeside ↗";
     actions.append(link);
   }
+  if (business.website && realBusinessMode) {
+    const monitorButton = document.createElement("button");
+    monitorButton.type = "button";
+    monitorButton.textContent = business.isMonitored ? "Opdater overvågning" : "Start SEO-overvågning";
+    monitorButton.addEventListener("click", () => startMonitoring(business, monitorButton));
+    actions.append(monitorButton);
+    const monitorStatus = document.getElementById("monitorStatus");
+    if (monitorStatus) {
+      monitorStatus.textContent = business.isMonitored
+        ? "Overvågning aktiv · seneste måling: " + (business.fetchedAt ? new Date(business.fetchedAt).toLocaleString("da-DK") : "venter på første måling")
+        : "Når overvågningen er startet, opdateres score og markørfarve efter nye målinger.";
+    }
+  } else {
+    const monitorStatus = document.getElementById("monitorStatus");
+    if (monitorStatus) monitorStatus.textContent = "SEO-overvågning er kun tilgængelig for rigtige virksomheder med en hjemmeside.";
+  }
+
   if (typeof business.lat === "number" && typeof business.lng === "number") {
     const mapButton = document.createElement("button");
     mapButton.type = "button";
@@ -403,6 +513,7 @@ document.getElementById("businessSearchForm").addEventListener("submit", async e
     document.getElementById("search").value = "";
     document.getElementById("region").value = "all";
     render();
+    await refreshMonitoredScores();
     map.fitBounds(L.latLngBounds(data.map(b => [b.lat,b.lng])), {padding:[25,25], maxZoom:12});
     status.textContent = "Fandt " + data.length + " virksomheder nær " + (payload.searchedCity || city) +
       ". Klik på en markør og vælg “Analyser SEO” for at måle hjemmesiden.";
@@ -434,6 +545,7 @@ map.on("popupopen", event => {
       business.performanceScore = result.performanceScore;
       business.fetchedAt = result.fetchedAt;
       render();
+      await startMonitoring(business, null);
       showBusinessDetails(business);
       const updated = markers.find(m => m.business === business);
       if (updated) updated.marker.openPopup();
@@ -553,6 +665,8 @@ document.getElementById("analyzerForm").addEventListener("submit",async event =>
 });
 
 render();
+refreshMonitoredScores();
+setInterval(refreshMonitoredScores, MONITOR_POLL_INTERVAL_MS);
 </script>
 </body>
 </html>
