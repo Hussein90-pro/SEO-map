@@ -235,6 +235,52 @@ async function startMonitoring(business, button) {
   }
 }
 
+
+async function runManualMonitorCheck(business, button) {
+  const status = document.getElementById("businessSearchStatus");
+  if (!business || !business.monitorId) {
+    if (status) status.textContent = "Denne hjemmeside er ikke registreret til overvågning endnu. Tryk først på Start SEO-overvågning.";
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Kontrollerer...";
+  }
+  if (status) status.textContent = "Kører SEO-kontrol for " + business.name + "...";
+  try {
+    const response = await fetch(API_BASE + "/api/monitor/" + encodeURIComponent(business.monitorId) + "/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    let payload = {};
+    try { payload = await response.json(); } catch {}
+    if (!response.ok) throw new Error(payload.error || "Serveren afviste SEO-kontrollen (HTTP " + response.status + ").");
+    await refreshMonitoredScores();
+    const detailResponse = await fetch(API_BASE + "/api/monitor/" + encodeURIComponent(business.monitorId), { cache: "no-store" });
+    if (detailResponse.ok) {
+      const detail = await detailResponse.json();
+      const latest = detail.latest || detail.site?.latest;
+      if (latest) {
+        if (typeof latest.seoScore === "number") business.score = latest.seoScore;
+        if (typeof latest.performanceScore === "number") business.performanceScore = latest.performanceScore;
+        if (latest.fetchedAt) business.fetchedAt = latest.fetchedAt;
+      }
+    }
+    render();
+    showBusinessDetails(business);
+    if (status) status.textContent = "SEO-kontrol gennemført for " + business.name + ".";
+  } catch (error) {
+    if (status) status.textContent = "SEO-kontrol fejlede: " + (error.message || "Ukendt fejl");
+    const monitorStatus = document.getElementById("monitorStatus");
+    if (monitorStatus) monitorStatus.textContent = "SEO-kontrol fejlede: " + (error.message || "Ukendt fejl");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = business.isMonitored ? "Kør SEO-kontrol nu" : "Start SEO-overvågning";
+    }
+  }
+}
+
 async function refreshMonitoredScores() {
   if (monitorPollInProgress) return;
   monitorPollInProgress = true;
@@ -424,7 +470,8 @@ function render() {
     const analyzeButton = (realBusinessMode && b.website)
       ? '<br><button type="button" class="popup-analyze" data-business-id="' + escapeHtml(b.id) + '">Analyser SEO</button>' +
         '<br><button type="button" class="popup-monitor" data-business-id="' + escapeHtml(b.id) + '">' +
-        (b.isMonitored ? 'Kør SEO-kontrol nu' : 'Start SEO-overvågning') + '</button>'
+        (b.isMonitored ? 'Kør SEO-kontrol nu' : 'Start SEO-overvågning') + '</button>' +
+        '<br><span class="popup-action-status" data-status-id="' + escapeHtml(b.id) + '" style="display:block;margin-top:6px;font-size:12px;color:#a8b6ce"></span>'
       : "";
     const contact = [
       b.phone ? "Telefon: " + escapeHtml(b.phone) : "",
@@ -546,7 +593,10 @@ map.on("popupopen", event => {
     }
 
     const status = document.getElementById("businessSearchStatus");
+    const popupStatus = popupNode.querySelector('[data-status-id="' + CSS.escape(button.dataset.businessId) + '"]');
+    const setPopupStatus = message => { if (popupStatus) popupStatus.textContent = message; };
     button.disabled = true;
+    setPopupStatus("Arbejder...");
 
     try {
       if (button.classList.contains("popup-analyze")) {
@@ -563,6 +613,7 @@ map.on("popupopen", event => {
         await refreshMonitoredScores();
         showBusinessDetails(business);
         status.textContent = "SEO-analyse færdig for " + business.name + ".";
+        setPopupStatus("Analyse gennemført.");
       } else if (button.classList.contains("popup-monitor")) {
         if (business.isMonitored && business.monitorId) {
           button.textContent = "Kontrollerer...";
@@ -573,8 +624,10 @@ map.on("popupopen", event => {
           await refreshMonitoredScores();
         }
         showBusinessDetails(business);
+        setPopupStatus(business.isMonitored ? "Overvågning aktiv." : "Overvågning ikke bekræftet.");
       }
     } catch (error) {
+      setPopupStatus("Fejl: " + (error.message || "Handlingen kunne ikke gennemføres."));
       status.textContent = error.message || "Handlingen kunne ikke gennemføres.";
     } finally {
       button.disabled = false;
