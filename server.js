@@ -1,4 +1,3 @@
-
 "use strict";
 
 const express = require("express");
@@ -12,17 +11,15 @@ const VERSION = "0.8.0";
 app.use(express.json({ limit: "20kb" }));
 
 app.use((req, res, next) => {
-  const allowedOrigin = process.env.FRONTEND_ORIGIN || "*";
-
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    process.env.FRONTEND_ORIGIN || "*"
+  );
   res.setHeader(
     "Access-Control-Allow-Methods",
     "GET,POST,DELETE,OPTIONS"
   );
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type"
-  );
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
@@ -54,8 +51,7 @@ const VISIBILITY_CACHE_MS = 24 * 60 * 60 * 1000;
 
 const CHECK_INTERVAL_MS = Math.max(
   5 * 60 * 1000,
-  Number(process.env.LIVE_CHECK_INTERVAL_MS) ||
-    60 * 60 * 1000
+  Number(process.env.LIVE_CHECK_INTERVAL_MS) || 60 * 60 * 1000
 );
 
 // --------------------------------------------------
@@ -64,9 +60,7 @@ const CHECK_INTERVAL_MS = Math.max(
 
 async function initDatabase() {
   if (!pool) {
-    throw new Error(
-      "DATABASE_URL mangler i Render Environment."
-    );
+    throw new Error("DATABASE_URL mangler i Render Environment.");
   }
 
   await pool.query(`
@@ -81,8 +75,7 @@ async function initDatabase() {
   `);
 
   await pool.query(`
-    CREATE INDEX IF NOT EXISTS
-    monitored_sites_last_checked_idx
+    CREATE INDEX IF NOT EXISTS monitored_sites_last_checked_idx
     ON monitored_sites (last_checked_at)
   `);
 
@@ -115,9 +108,7 @@ function rowToSite(row) {
     createdAt: row.created_at,
     lastCheckedAt: row.last_checked_at,
     latest: row.latest || null,
-    history: Array.isArray(row.history)
-      ? row.history
-      : []
+    history: Array.isArray(row.history) ? row.history : []
   };
 }
 
@@ -135,9 +126,7 @@ async function fetchJson(url, options = {}, timeoutMs = 30000) {
 
   if (!response.ok) {
     const error = new Error(
-      data.message ||
-      data.error ||
-      `HTTP ${response.status}`
+      data.message || data.error || `HTTP ${response.status}`
     );
 
     error.status = response.status;
@@ -182,8 +171,7 @@ function domainOf(value) {
   if (!url) return "";
 
   const hostname = new URL(url)
-    .hostname
-    .toLowerCase()
+    .hostname.toLowerCase()
     .replace(/^www\./, "");
 
   if (
@@ -200,10 +188,7 @@ function domainOf(value) {
 }
 
 function siteId(url) {
-  return crypto
-    .createHash("sha256")
-    .update(url)
-    .digest("hex");
+  return crypto.createHash("sha256").update(url).digest("hex");
 }
 
 function cacheGet(cache, key, ttl) {
@@ -230,9 +215,8 @@ function getDataForSeoAuth() {
 
   if (!login || !password) return "";
 
-  return "Basic " + Buffer
-    .from(`${login}:${password}`)
-    .toString("base64");
+  return "Basic " +
+    Buffer.from(`${login}:${password}`).toString("base64");
 }
 
 // --------------------------------------------------
@@ -322,22 +306,15 @@ app.get("/api/businesses", async (req, res) => {
     const lat = Number(place.lat);
     const lon = Number(place.lon);
 
-    const url = new URL(
-      "https://api.geoapify.com/v2/places"
-    );
+    const url = new URL("https://api.geoapify.com/v2/places");
 
+    // Kun gyldige kategorier – retail er fjernet.
     url.searchParams.set(
       "categories",
-      "commercial,office,catering,service,accommodation,healthcare,education,leisure,retail"
+      "commercial,office,catering,service,accommodation,healthcare,education,leisure"
     );
-    url.searchParams.set(
-      "filter",
-      `circle:${lon},${lat},5000`
-    );
-    url.searchParams.set(
-      "bias",
-      `proximity:${lon},${lat}`
-    );
+    url.searchParams.set("filter", `circle:${lon},${lat},5000`);
+    url.searchParams.set("bias", `proximity:${lon},${lat}`);
     url.searchParams.set("limit", "100");
     url.searchParams.set("apiKey", apiKey);
 
@@ -351,9 +328,7 @@ app.get("/api/businesses", async (req, res) => {
       const name = p.name || p.address_line1;
 
       const website = normalizeUrl(
-        p.website ||
-        raw.website ||
-        raw.contact_website
+        p.website || raw.website || raw.contact_website
       );
 
       const coords = feature.geometry?.coordinates || [];
@@ -374,10 +349,7 @@ app.get("/api/businesses", async (req, res) => {
       seen.add(key);
 
       businesses.push({
-        id: String(
-          p.place_id ||
-          `${name}-${latitude}-${lng}`
-        ),
+        id: String(p.place_id || `${name}-${latitude}-${lng}`),
         name,
         city: p.city || place.city || city,
         country: p.country || place.country || "",
@@ -410,11 +382,11 @@ app.get("/api/businesses", async (req, res) => {
       result
     );
 
-    res.json(result);
+    return res.json(result);
   } catch (error) {
     console.error("By-søgning fejlede:", error.message);
 
-    res.status(502).json({
+    return res.status(502).json({
       error: "Kunne ikke hente virksomheder fra Geoapify."
     });
   }
@@ -466,12 +438,9 @@ app.get("/api/businesses-in-view", async (req, res) => {
     });
   }
 
-  const boundsKey = [
-    west,
-    south,
-    east,
-    north
-  ].map(n => n.toFixed(3)).join(",");
+  const boundsKey = [west, south, east, north]
+    .map(n => n.toFixed(3))
+    .join(",");
 
   const cached = cacheGet(
     businessCache,
@@ -482,13 +451,12 @@ app.get("/api/businesses-in-view", async (req, res) => {
   if (cached) return res.json(cached);
 
   try {
-    const url = new URL(
-      "https://api.geoapify.com/v2/places"
-    );
+    const url = new URL("https://api.geoapify.com/v2/places");
 
+    // Samme rettelse i kortsøgningen: retail er fjernet.
     url.searchParams.set(
       "categories",
-      "commercial,office,catering,service,accommodation,healthcare,education,leisure,retail"
+      "commercial,office,catering,service,accommodation,healthcare,education,leisure"
     );
     url.searchParams.set(
       "filter",
@@ -507,9 +475,7 @@ app.get("/api/businesses-in-view", async (req, res) => {
       const name = p.name || p.address_line1;
 
       const website = normalizeUrl(
-        p.website ||
-        raw.website ||
-        raw.contact_website
+        p.website || raw.website || raw.contact_website
       );
 
       const coords = feature.geometry?.coordinates || [];
@@ -530,9 +496,7 @@ app.get("/api/businesses-in-view", async (req, res) => {
       seen.add(key);
 
       businesses.push({
-        id: String(
-          p.place_id || `${name}-${lat}-${lng}`
-        ),
+        id: String(p.place_id || `${name}-${lat}-${lng}`),
         name: String(name),
         city: p.city || p.county || "",
         country: p.country || "",
@@ -559,11 +523,11 @@ app.get("/api/businesses-in-view", async (req, res) => {
     };
 
     cacheSet(businessCache, "bbox:" + boundsKey, result);
-    res.json(result);
+    return res.json(result);
   } catch (error) {
     console.error("Kortområdesøgning fejlede:", error.message);
 
-    res.status(502).json({
+    return res.status(502).json({
       error: "Kunne ikke hente virksomheder for kortområdet."
     });
   }
@@ -593,10 +557,7 @@ async function runPageSpeed(value) {
   url.searchParams.append("category", "PERFORMANCE");
 
   if (process.env.PAGESPEED_API_KEY) {
-    url.searchParams.set(
-      "key",
-      process.env.PAGESPEED_API_KEY
-    );
+    url.searchParams.set("key", process.env.PAGESPEED_API_KEY);
   }
 
   const data = await fetchJson(url, {}, 60000);
@@ -633,11 +594,11 @@ app.get("/api/seo", async (req, res) => {
   }
 
   try {
-    res.json(await runPageSpeed(website));
+    return res.json(await runPageSpeed(website));
   } catch (error) {
     console.error("SEO-analyse fejlede:", error.message);
 
-    res.status(502).json({
+    return res.status(502).json({
       error:
         error.message === "PAGESPEED_API_KEY mangler i Render."
           ? error.message
@@ -680,7 +641,7 @@ app.get("/api/site-score", async (req, res) => {
 
     const row = result.rows[0];
 
-    res.json({
+    return res.json({
       found: Boolean(row.latest),
       id: row.id,
       url: row.url,
@@ -691,7 +652,7 @@ app.get("/api/site-score", async (req, res) => {
   } catch (error) {
     console.error("Hentning af SEO-score fejlede:", error.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Kunne ikke hente SEO-resultatet."
     });
   }
@@ -725,7 +686,7 @@ app.post("/api/monitor", async (req, res) => {
 
     const site = rowToSite(result.rows[0]);
 
-    res.status(201).json({
+    return res.status(201).json({
       id: site.id,
       url: site.url,
       monitored: true,
@@ -735,7 +696,7 @@ app.post("/api/monitor", async (req, res) => {
   } catch (error) {
     console.error("Registrering fejlede:", error.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Kunne ikke gemme hjemmesiden i databasen."
     });
   }
@@ -753,7 +714,7 @@ app.get("/api/monitor", async (req, res) => {
       "SELECT * FROM monitored_sites ORDER BY created_at DESC"
     );
 
-    res.json({
+    return res.json({
       intervalMs: CHECK_INTERVAL_MS,
       count: result.rowCount,
       sites: result.rows.map(row => {
@@ -772,7 +733,7 @@ app.get("/api/monitor", async (req, res) => {
   } catch (error) {
     console.error("Hentning af overvågning fejlede:", error.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Kunne ikke hente overvågede hjemmesider."
     });
   }
@@ -797,11 +758,11 @@ app.get("/api/monitor/:id", async (req, res) => {
       });
     }
 
-    res.json(rowToSite(result.rows[0]));
+    return res.json(rowToSite(result.rows[0]));
   } catch (error) {
     console.error("Hentning af historik fejlede:", error.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Kunne ikke hente hjemmesidens historik."
     });
   }
@@ -813,6 +774,7 @@ app.get("/api/monitor/:id", async (req, res) => {
 
 async function checkTrackedSite(site) {
   const record = await runPageSpeed(site.url);
+
   const history = [
     ...(Array.isArray(site.history) ? site.history : []),
     record
@@ -853,11 +815,9 @@ app.post("/api/monitor/:id/check", async (req, res) => {
       });
     }
 
-    const site = await checkTrackedSite(
-      rowToSite(result.rows[0])
-    );
+    const site = await checkTrackedSite(rowToSite(result.rows[0]));
 
-    res.json({
+    return res.json({
       ...site.latest,
       id: site.id,
       monitored: true
@@ -865,7 +825,7 @@ app.post("/api/monitor/:id/check", async (req, res) => {
   } catch (error) {
     console.error("SEO-kontrol fejlede:", error.message);
 
-    res.status(502).json({
+    return res.status(502).json({
       error: "Kunne ikke opdatere SEO-målingen."
     });
   }
@@ -890,11 +850,11 @@ app.delete("/api/monitor/:id", async (req, res) => {
       });
     }
 
-    res.sendStatus(204);
+    return res.sendStatus(204);
   } catch (error) {
     console.error("Sletning fejlede:", error.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Kunne ikke fjerne hjemmesiden."
     });
   }
@@ -918,10 +878,7 @@ app.post("/api/proposal", async (req, res) => {
     const seo = await runPageSpeed(website);
     const tasks = [];
 
-    if (
-      seo.seoScore !== null &&
-      seo.seoScore < 90
-    ) {
+    if (seo.seoScore !== null && seo.seoScore < 90) {
       tasks.push({
         task: "Teknisk SEO-gennemgang",
         reason: `SEO-score er ${seo.seoScore}/100.`,
@@ -936,8 +893,7 @@ app.post("/api/proposal", async (req, res) => {
     ) {
       tasks.push({
         task: "Optimering af hastighed",
-        reason:
-          `Performance-score er ${seo.performanceScore}/100.`,
+        reason: `Performance-score er ${seo.performanceScore}/100.`,
         suggestedAction:
           "Undersøg billeder, JavaScript, CSS, caching og serverens svartid."
       });
@@ -958,7 +914,9 @@ app.post("/api/proposal", async (req, res) => {
       `Hjemmeside: ${website}`,
       "",
       `SEO-score: ${
-        seo.seoScore === null ? "Ikke tilgængelig" : seo.seoScore + "/100"
+        seo.seoScore === null
+          ? "Ikke tilgængelig"
+          : seo.seoScore + "/100"
       }`,
       `Performance-score: ${
         seo.performanceScore === null
@@ -967,8 +925,9 @@ app.post("/api/proposal", async (req, res) => {
       }`,
       "",
       "ANBEFALEDE FORBEDRINGER",
-      ...tasks.map((task, index) =>
-        `${index + 1}. ${task.task}\n   ${task.suggestedAction}`
+      ...tasks.map(
+        (task, index) =>
+          `${index + 1}. ${task.task}\n   ${task.suggestedAction}`
       ),
       "",
       "OMFANG OG PRIS",
@@ -977,7 +936,7 @@ app.post("/api/proposal", async (req, res) => {
       "Dette er et uforpligtende tilbudsudkast. Pris, leveringstid og leverancer skal godkendes før afsendelse."
     ].join("\n");
 
-    res.json({
+    return res.json({
       url: website,
       domain: domainOf(website),
       measuredAt: seo.fetchedAt,
@@ -994,7 +953,7 @@ app.post("/api/proposal", async (req, res) => {
   } catch (error) {
     console.error("Tilbudsforslag fejlede:", error.message);
 
-    res.status(502).json({
+    return res.status(502).json({
       error: "Kunne ikke oprette et tilbudsforslag."
     });
   }
@@ -1084,11 +1043,11 @@ app.get("/api/google-visibility", async (req, res) => {
     };
 
     cacheSet(visibilityCache, cacheKey, payload);
-    res.json(payload);
+    return res.json(payload);
   } catch (error) {
     console.error("Google-synlighed fejlede:", error.message);
 
-    res.status(502).json({
+    return res.status(502).json({
       error: "Kunne ikke hente Google-synlighedsdata."
     });
   }
@@ -1100,11 +1059,7 @@ app.get("/api/google-visibility", async (req, res) => {
 // --------------------------------------------------
 
 async function runScheduledChecks() {
-  if (
-    !pool ||
-    !databaseReady ||
-    scheduledCheckRunning
-  ) {
+  if (!pool || !databaseReady || scheduledCheckRunning) {
     return;
   }
 
@@ -1146,10 +1101,7 @@ async function startServer() {
   try {
     await initDatabase();
   } catch (error) {
-    console.error(
-      "Databaseopstart fejlede:",
-      error.message
-    );
+    console.error("Databaseopstart fejlede:", error.message);
     process.exit(1);
   }
 
