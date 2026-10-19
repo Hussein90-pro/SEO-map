@@ -41,6 +41,19 @@ button:disabled{opacity:.65;cursor:wait}
 .result-grid .stat{margin:0}
 .result-link{color:var(--green);overflow-wrap:anywhere}
 .result-details{padding:12px;border:1px solid var(--border);border-radius:8px;margin-top:12px;background:#0e1829}
+.business-detail{margin-top:16px;display:none}
+.business-detail.active{display:block}
+.detail-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.detail-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.detail-kpi{padding:13px;background:#0e1829;border:1px solid var(--border);border-radius:9px}
+.detail-kpi small{display:block;color:var(--muted);line-height:1.4}
+.detail-kpi strong{display:block;font-size:22px;margin-top:7px;overflow-wrap:anywhere}
+.detail-section{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+.detail-row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;font-size:14px}
+.detail-row span:first-child{color:var(--muted)}
+.detail-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+@media(max-width:600px){.detail-kpis{grid-template-columns:1fr}.detail-row{flex-direction:column;gap:3px}}
+
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:white}
 .leaflet-popup-content{line-height:1.6}
 footer{padding:24px 0;color:#8494ae;font-size:12px}
@@ -118,7 +131,28 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
       <p class="note">Demoen viser eksempeldata. Brug “Find rigtige virksomheder” for at hente registrerede virksomheder; deres SEO-score beregnes først, når du analyserer hjemmesiden.</p>
     </aside>
   </section>
-  <footer>SEO MAP · Prototype v0.3 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
+
+  <section id="businessDetail" class="panel business-detail" aria-labelledby="detailHeading" aria-live="polite">
+    <div class="detail-top">
+      <div>
+        <h2 id="detailHeading">Virksomhedsprofil</h2>
+        <p id="detailLocation" class="sub"></p>
+      </div>
+      <span id="detailStatus" class="muted">Ikke analyseret</span>
+    </div>
+    <div id="detailKpis" class="detail-kpis"></div>
+    <div class="detail-section">
+      <h2>Virksomhedsoplysninger</h2>
+      <div id="detailFacts"></div>
+    </div>
+    <div class="detail-section">
+      <h2>Hvad tallene fortæller</h2>
+      <p id="detailExplanation" class="sub"></p>
+      <p class="note">SEO-score fra Lighthouse er en teknisk måling af hjemmesidens SEO-kontroller – ikke virksomhedens faktiske Google-placering, trafik eller omsætning. Disse data kræver separate datakilder eller adgang fra virksomheden.</p>
+    </div>
+    <div class="detail-actions" id="detailActions"></div>
+  </section>
+  <footer>SEO MAP · Prototype v0.4 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -143,6 +177,96 @@ const demoData = [
 ];
 let data = demoData;
 let realBusinessMode = false;
+let selectedBusiness = null;
+
+function addDetailRow(container, label, value) {
+  const row = document.createElement("div");
+  row.className = "detail-row";
+  const left = document.createElement("span");
+  left.textContent = label;
+  const right = document.createElement("span");
+  right.textContent = value || "Ikke tilgængelig";
+  row.append(left, right);
+  container.append(row);
+}
+
+function showBusinessDetails(business) {
+  selectedBusiness = business;
+  const panel = document.getElementById("businessDetail");
+  panel.classList.add("active");
+  document.getElementById("detailHeading").textContent = business.name || "Virksomhedsprofil";
+  document.getElementById("detailLocation").textContent =
+    [business.city, business.country].filter(Boolean).join(", ") || "Placering ikke oplyst";
+
+  const hasSeo = typeof business.score === "number";
+  const hasPerformance = typeof business.performanceScore === "number";
+  document.getElementById("detailStatus").textContent = hasSeo
+    ? "Analyse gennemført"
+    : (business.website ? "Hjemmeside fundet · Ikke analyseret" : "Ingen hjemmeside registreret");
+
+  const kpis = document.getElementById("detailKpis");
+  kpis.replaceChildren();
+  const cards = [
+    ["SEO-score", hasSeo ? business.score + "/100" : "Ikke analyseret", hasSeo ? color(business.score) : "#a8b6ce"],
+    ["Performance", hasPerformance ? business.performanceScore + "/100" : "Ikke målt", hasPerformance ? color(business.performanceScore) : "#a8b6ce"],
+    ["Senest analyseret", business.fetchedAt ? new Date(business.fetchedAt).toLocaleString("da-DK") : "Ingen måling", "#edf2ff"]
+  ];
+  cards.forEach(([label, value, tint]) => {
+    const card = document.createElement("div");
+    card.className = "detail-kpi";
+    const small = document.createElement("small");
+    small.textContent = label;
+    const strong = document.createElement("strong");
+    strong.textContent = value;
+    strong.style.color = tint;
+    card.append(small, strong);
+    kpis.append(card);
+  });
+
+  const facts = document.getElementById("detailFacts");
+  facts.replaceChildren();
+  addDetailRow(facts, "Branche", business.industry || "Ikke oplyst");
+  addDetailRow(facts, "Land", business.country || "Ikke oplyst");
+  addDetailRow(facts, "Telefon", business.phone || "Ikke tilgængelig");
+  addDetailRow(facts, "E-mail", business.email || "Ikke tilgængelig");
+  addDetailRow(facts, "Hjemmeside", business.website || "Ikke registreret");
+
+  const explanation = document.getElementById("detailExplanation");
+  if (!hasSeo) {
+    explanation.textContent = business.website
+      ? "Hjemmesiden er fundet, men der er endnu ingen SEO-måling. Vælg markøren på kortet og tryk på “Analyser SEO” for at hente en måling."
+      : "Der er ikke registreret en hjemmeside for denne virksomhed, så vi kan ikke måle dens hjemmeside endnu.";
+  } else {
+    explanation.textContent = business.score >= 80
+      ? "Lighthouse har registreret en relativt høj SEO-score. Det er stadig relevant at kontrollere søgeordsplaceringer, indeksering og lokal synlighed separat."
+      : business.score >= 60
+        ? "Lighthouse har fundet plads til tekniske SEO-forbedringer. Scoren viser ikke i sig selv virksomhedens placeringer i Google."
+        : "Lighthouse indikerer, at hjemmesiden kan have tekniske SEO-forbedringer. Resultatet bør følges op med konkrete kontroller og data om Google-synlighed.";
+  }
+
+  const actions = document.getElementById("detailActions");
+  actions.replaceChildren();
+  if (business.website) {
+    const link = document.createElement("a");
+    link.className = "result-link";
+    link.href = business.website;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Åbn hjemmeside ↗";
+    actions.append(link);
+  }
+  if (typeof business.lat === "number" && typeof business.lng === "number") {
+    const mapButton = document.createElement("button");
+    mapButton.type = "button";
+    mapButton.textContent = "Vis på kort";
+    mapButton.addEventListener("click", () => {
+      map.setView([business.lat, business.lng], 12);
+      const found = markers.find(item => item.business === business);
+      if (found) found.marker.openPopup();
+    });
+    actions.append(mapButton);
+  }
+}
 
 const map = L.map("map").setView([25,10],2);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -194,6 +318,7 @@ function render() {
       b.phone ? "Telefon: " + escapeHtml(b.phone) : "",
       b.email ? "E-mail: " + escapeHtml(b.email) : ""
     ].filter(Boolean).join("<br>");
+    marker.on("click", () => showBusinessDetails(b));
     marker.bindPopup(
       "<b>" + escapeHtml(b.name) + "</b><br>" +
       escapeHtml(b.city || "") + (b.country ? ", " + escapeHtml(b.country) : "") + "<br>" +
@@ -215,6 +340,7 @@ function render() {
 
   document.querySelectorAll(".company").forEach((el,i) => {
     const openCompany = () => {
+      showBusinessDetails(items[i]);
       map.setView([items[i].lat,items[i].lng],5);
       const found = markers.find(m => m.business === items[i]);
       if (found) found.marker.openPopup();
@@ -308,6 +434,7 @@ map.on("popupopen", event => {
       business.performanceScore = result.performanceScore;
       business.fetchedAt = result.fetchedAt;
       render();
+      showBusinessDetails(business);
       const updated = markers.find(m => m.business === business);
       if (updated) updated.marker.openPopup();
       status.textContent = "SEO-analyse færdig for " + business.name + ": " +
