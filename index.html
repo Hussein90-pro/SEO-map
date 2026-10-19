@@ -71,7 +71,7 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
 
   <section class="panel" style="margin-bottom:16px" aria-labelledby="businessSearchHeading">
     <h2 id="businessSearchHeading">Find rigtige virksomheder</h2>
-    <p class="sub">Søg på en by, fx Aarhus, København eller London. Vi finder virksomheder med registrerede hjemmesider i OpenStreetMap.</p>
+    <p class="sub">Søg på en by eller prøv et virksomhedsnavn. Vi forsøger at finde rigtige virksomheder med registrerede hjemmesider via OpenStreetMap.</p>
     <form id="businessSearchForm">
       <div class="controls">
         <input id="businessCity" type="text" placeholder="Søg efter by, fx Aarhus eller London" aria-label="By til virksomhedssøgning" required>
@@ -103,7 +103,8 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
   </section>
 
   <div class="controls">
-    <input id="search" placeholder="Søg efter virksomhed, by eller branche..." aria-label="Søg i demo-virksomheder">
+    <input id="search" placeholder="Søg efter virksomhedsnavn, by eller branche..." aria-label="Søg efter virksomhed, by eller branche">
+    <button id="realSearchButton" type="button">Søg rigtige virksomheder</button>
     <select id="region" aria-label="Filtrér efter region">
       <option value="all">Hele verden</option>
       <option value="Europe">Europa</option>
@@ -128,7 +129,7 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
       </div>
       <h2>Virksomheder</h2>
       <div id="list"></div>
-      <p class="note">Demoen viser eksempeldata. Brug “Find rigtige virksomheder” for at hente registrerede virksomheder; deres SEO-score beregnes først, når du analyserer hjemmesiden.</p>
+      <p class="note">Rigtige søgeresultater afhænger af virksomhedsoplysninger i OpenStreetMap. Hvis du søger på et virksomhedsnavn, prøver systemet at slå søgeteksten op via den eksisterende virksomheds-API. Ikke alle virksomheder er registreret dér.</p>
     </aside>
   </section>
 
@@ -153,7 +154,7 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
     <p id="monitorStatus" class="status" role="status" aria-live="polite">SEO-overvågning er ikke startet.</p>
     <div class="detail-actions" id="detailActions"></div>
   </section>
-  <footer>SEO MAP · Prototype v0.4 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
+  <footer>SEO MAP · Prototype v0.5 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -474,6 +475,55 @@ function render() {
     : "—";
   document.getElementById("good").textContent = scored.filter(b => b.score >= 80).length;
 }
+
+
+async function searchRealBusinessesFromMap() {
+  const query = document.getElementById("search").value.trim();
+  const status = document.getElementById("businessSearchStatus");
+  const button = document.getElementById("realSearchButton");
+  if (!query) {
+    status.textContent = "Skriv et virksomhedsnavn eller en by i søgefeltet først.";
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Søger...";
+  status.textContent = 'Søger efter rigtige virksomheder for "' + query + '"...';
+  try {
+    const response = await fetch(API_BASE + "/api/businesses?city=" + encodeURIComponent(query));
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Kunne ikke hente virksomheder.");
+    if (!Array.isArray(payload.businesses) || payload.businesses.length === 0) {
+      throw new Error('Ingen rigtige virksomheder blev fundet for "' + query + '". Prøv en by, fx Aarhus eller London.');
+    }
+    data = payload.businesses.map(b => ({
+      ...b,
+      score: null,
+      region: "all",
+      industry: b.industry || "Branche ikke oplyst"
+    }));
+    realBusinessMode = true;
+    document.getElementById("region").value = "all";
+    render();
+    await refreshMonitoredScores();
+    const located = data.filter(b => typeof b.lat === "number" && typeof b.lng === "number");
+    if (located.length) map.fitBounds(L.latLngBounds(located.map(b => [b.lat,b.lng])), {padding:[25,25], maxZoom:12});
+    status.textContent = "Fandt " + data.length + " rigtige virksomheder via søgningen på '" + query +
+      "'. Klik på en markør for at se profilen og analysere hjemmesiden.";
+  } catch (error) {
+    status.textContent = error.message || "Der opstod en fejl ved virksomhedssøgningen.";
+  } finally {
+    button.disabled = false;
+    button.textContent = "Søg rigtige virksomheder";
+  }
+}
+
+document.getElementById("realSearchButton").addEventListener("click", searchRealBusinessesFromMap);
+document.getElementById("search").addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    searchRealBusinessesFromMap();
+  }
+});
 
 document.getElementById("search").addEventListener("input",render);
 document.getElementById("region").addEventListener("change",render);
