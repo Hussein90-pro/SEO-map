@@ -154,6 +154,13 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
       <p class="note">SEO-score fra Lighthouse er en teknisk måling af hjemmesidens SEO-kontroller – ikke virksomhedens faktiske Google-placering, trafik eller omsætning. Disse data kræver separate datakilder eller adgang fra virksomheden.</p>
     </div>
     <div class="detail-section">
+      <h2>Google-synlighed · DataForSEO</h2>
+      <p class="note">Viser estimerede organiske Google-data for domænet i Danmark. Dette er en separat måling fra Lighthouse SEO-score.</p>
+      <button type="button" id="visibilityButton" disabled>Vælg en virksomhed med hjemmeside</button>
+      <p id="visibilityStatus" class="status" role="status" aria-live="polite">Data hentes først, når du beder om det, så der ikke bruges unødige API-kald.</p>
+      <div id="visibilityResults" class="result-details"></div>
+    </div>
+    <div class="detail-section">
       <h2>Forbedringsmuligheder</h2>
       <div id="improvementList" class="result-details"></div>
     </div>
@@ -165,7 +172,7 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
     <p id="monitorStatus" class="status" role="status" aria-live="polite">SEO-overvågning er ikke startet.</p>
     <div class="detail-actions" id="detailActions"></div>
   </section>
-  <footer>SEO MAP · Prototype v1.1 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
+  <footer>SEO MAP · DataForSEO Google-synlighed · Google PageSpeed Insights · Kortdata © OpenStreetMap</footer>
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -417,10 +424,55 @@ async function loadMonitorHistory(business) {
   }
 }
 
+async function loadGoogleVisibility(business) {
+  const button = document.getElementById("visibilityButton");
+  const status = document.getElementById("visibilityStatus");
+  const target = document.getElementById("visibilityResults");
+  if (!business || !business.website) {
+    status.textContent = "Virksomheden har ingen hjemmeside at undersøge.";
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Henter Google-data…";
+  status.textContent = "DataForSEO undersøger domænets organiske synlighed i Danmark. Det kan tage lidt tid.";
+  target.replaceChildren();
+  try {
+    const url = new URL(/^https?:\/\//i.test(business.website) ? business.website : "https://" + business.website);
+    const response = await fetch(API_BASE + "/api/google-visibility?domain=" + encodeURIComponent(url.hostname.replace(/^www\./i, "")));
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "DataForSEO kunne ikke hente synlighedsdata.");
+    const m = payload.metrics || {};
+    const rows = [
+      ["Organiske søgeordsplaceringer", typeof m.count === "number" ? m.count.toLocaleString("da-DK") : "Ikke oplyst"],
+      ["Estimeret organisk trafikværdi", typeof m.estimated_paid_traffic_cost === "number" ? new Intl.NumberFormat("da-DK", {style:"currency",currency:"USD",maximumFractionDigits:0}).format(m.estimated_paid_traffic_cost) : "Ikke oplyst"],
+      ["Estimeret trafik (ETV)", typeof m.etv === "number" ? Math.round(m.etv).toLocaleString("da-DK") : "Ikke oplyst"],
+      ["Placering 1", typeof m.pos_1 === "number" ? m.pos_1.toLocaleString("da-DK") : "—"],
+      ["Placering 2–3", typeof m.pos_2_3 === "number" ? m.pos_2_3.toLocaleString("da-DK") : "—"],
+      ["Placering 4–10", typeof m.pos_4_10 === "number" ? m.pos_4_10.toLocaleString("da-DK") : "—"],
+      ["Nye placeringer", typeof m.is_new === "number" ? m.is_new.toLocaleString("da-DK") : "—"],
+      ["Placeringer steget / faldet", (typeof m.is_up === "number" ? m.is_up.toLocaleString("da-DK") : "—") + " / " + (typeof m.is_down === "number" ? m.is_down.toLocaleString("da-DK") : "—")]
+    ];
+    rows.forEach(([label,value]) => addDetailRow(target, label, value));
+    status.textContent = "Kilde: DataForSEO · Land: " + (payload.location || "Denmark") + " · Målt: " + new Date(payload.checkedAt || Date.now()).toLocaleString("da-DK") + ". Tallene er estimater, ikke bekræftede besøgstal.";
+    button.textContent = "Opdater Google-synlighed";
+  } catch (error) {
+    status.textContent = error.message || "DataForSEO-forespørgslen fejlede.";
+    button.textContent = "Prøv Google-synlighed igen";
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function showBusinessDetails(business) {
   selectedBusiness = business;
   const panel = document.getElementById("businessDetail");
   panel.classList.add("active");
+  const visibilityButton = document.getElementById("visibilityButton");
+  visibilityButton.disabled = !business.website;
+  visibilityButton.textContent = business.website ? "Hent Google-synlighed" : "Ingen hjemmeside registreret";
+  visibilityButton.onclick = () => loadGoogleVisibility(business);
+  document.getElementById("visibilityStatus").textContent = "Data hentes først, når du beder om det, så der ikke bruges unødige API-kald.";
+  document.getElementById("visibilityResults").replaceChildren();
   document.getElementById("detailHeading").textContent = business.name || "Virksomhedsprofil";
   document.getElementById("detailLocation").textContent =
     [business.city, business.country].filter(Boolean).join(", ") || "Placering ikke oplyst";
@@ -729,16 +781,21 @@ async function startAutomaticSeoQueue(businesses) {
   const total = automaticPendingQueue.length;
   setAutomaticStatus("Automatisk SEO-analyse starter for " + total + " hjemmesider. Du kan fortsat bruge kortet imens.");
   try {
-    while (automaticPendingQueue.length) {
-      const business = automaticPendingQueue.shift();
-      if (!business || !business.website) continue;
-      setAutomaticStatus("Analyserer " + (completed + failed + skipped + 1) + " af " + total + ": " + business.name + "…");
-      const result = await analyzeBusinessAutomatically(business);
-      if (result === "failed") failed++;
-      else if (result === "success") completed++;
-      else skipped++;
-      await wait(AUTO_ANALYSIS_DELAY_MS);
-    }
+    // To samtidige analyser gør køen hurtigere uden at sende alle forespørgsler på én gang.
+    const worker = async () => {
+      while (automaticPendingQueue.length) {
+        const business = automaticPendingQueue.shift();
+        if (!business || !business.website) continue;
+        const position = completed + failed + skipped + 1;
+        setAutomaticStatus("Analyserer virksomhed " + position + " af ca. " + total + ": " + business.name + "…");
+        const result = await analyzeBusinessAutomatically(business);
+        if (result === "failed") failed++;
+        else if (result === "success") completed++;
+        else skipped++;
+        await wait(AUTO_ANALYSIS_DELAY_MS);
+      }
+    };
+    await Promise.all([worker(), worker()]);
   } finally {
     automaticQueueRunning = false;
     setAutomaticStatus("Automatisk SEO-kø færdig. Nye analyser: " + completed + ", genbrugte/allerede analyserede: " + skipped + ", fejl: " + failed + "." + (failed ? " Åbn en virksomhed for at se fejlen, eller kontrollér Render-loggen." : ""));
