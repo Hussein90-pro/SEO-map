@@ -37,6 +37,8 @@ button:disabled{opacity:.65;cursor:wait}
 .score{font-weight:bold;margin-top:5px}
 .note{font-size:12px;line-height:1.6;color:var(--muted)}
 .status{min-height:18px;font-size:13px;line-height:1.5;color:var(--muted)}
+.auto-status{padding:10px 12px;margin-top:10px;border:1px solid var(--border);border-radius:8px;background:#0e1829;font-size:13px;line-height:1.5;color:var(--muted)}
+.company-state{display:inline-block;margin-top:6px;font-size:12px;color:var(--muted)}
 .result-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
 .result-grid .stat{margin:0}
 .result-link{color:var(--green);overflow-wrap:anywhere}
@@ -71,7 +73,7 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
 
   <section class="panel" style="margin-bottom:16px" aria-labelledby="businessSearchHeading">
     <h2 id="businessSearchHeading">Find rigtige virksomheder</h2>
-    <p class="sub">Søg på en by, fx Aarhus, København eller London. Åbn en virksomheds markør for at analysere SEO eller starte en overvågning.</p>
+    <p class="sub">Søg på en by, fx Aarhus, København eller London. SEO-analyser starter automatisk i baggrunden for virksomheder med en registreret hjemmeside.</p>
     <form id="businessSearchForm">
       <div class="controls">
         <input id="businessCity" type="text" placeholder="Søg efter by, fx Aarhus eller London" aria-label="By til virksomhedssøgning" required>
@@ -79,12 +81,13 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
       </div>
     </form>
     <p id="businessSearchStatus" class="status" role="status" aria-live="polite"></p>
+    <div id="autoAnalysisStatus" class="auto-status" role="status" aria-live="polite">Automatisk SEO-analyse starter, når du søger efter rigtige virksomheder.</div>
     <p class="note">Prototype: Resultater afhænger af, hvilke virksomhedsoplysninger der er registreret i OpenStreetMap. Ikke alle virksomheder er med.</p>
   </section>
 
   <section class="panel" aria-labelledby="analyzerHeading">
     <h2 id="analyzerHeading">Analyser en hjemmeside</h2>
-    <p class="sub">Indtast en hjemmesideadresse for at hente en SEO-score og en performance-score fra Google. Analysen køres på mobilvisning.</p>
+    <p class="sub">Denne formular kan bruges til en enkelt hjemmeside. Virksomheder, du finder på kortet, analyseres automatisk i baggrunden. Analysen køres på mobilvisning.</p>
     <form id="analyzerForm">
       <div class="controls">
         <input id="websiteUrl" type="text" inputmode="url" autocomplete="url" placeholder="https://eksempel.dk" aria-label="Hjemmesideadresse" required>
@@ -128,7 +131,7 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
       </div>
       <h2>Virksomheder</h2>
       <div id="list"></div>
-      <p class="note">Demoen viser eksempeldata. Brug “Find rigtige virksomheder” for at hente registrerede virksomheder; deres SEO-score beregnes først, når du analyserer hjemmesiden.</p>
+      <p class="note">Demoen viser eksempeldata. Brug “Find rigtige virksomheder” for at hente registrerede virksomheder; SEO-analyser startes automatisk for hjemmesider, der findes.</p>
     </aside>
   </section>
 
@@ -162,7 +165,7 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
     <p id="monitorStatus" class="status" role="status" aria-live="polite">SEO-overvågning er ikke startet.</p>
     <div class="detail-actions" id="detailActions"></div>
   </section>
-  <footer>SEO MAP · Prototype v1.0 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
+  <footer>SEO MAP · Prototype v1.1 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -458,7 +461,7 @@ function showBusinessDetails(business) {
   const explanation = document.getElementById("detailExplanation");
   if (!hasSeo) {
     explanation.textContent = business.website
-      ? "Hjemmesiden er fundet, men der er endnu ingen SEO-måling. Vælg markøren på kortet og tryk på “Analyser SEO” for at hente en måling."
+      ? "Hjemmesiden er fundet. Den automatiske SEO-kø forsøger at hente en måling i baggrunden."
       : "Der er ikke registreret en hjemmeside for denne virksomhed, så vi kan ikke måle dens hjemmeside endnu.";
   } else {
     explanation.textContent = business.score >= 80
@@ -551,14 +554,14 @@ function render() {
 
     const scoreText = typeof b.score === "number"
       ? (realBusinessMode ? "SEO-score: <b>" + b.score + "/100</b>" : "Illustrativ demo-score: <b>" + b.score + "/100</b>")
-      : "SEO-score: <b>Ikke analyseret endnu</b>";
+      : (realBusinessMode ? "SEO-score: <b>" + escapeHtml(b.analysisStatus || "Afventer automatisk analyse") + "</b>" : "SEO-score: <b>Ikke analyseret endnu</b>");
     const websiteLink = b.website
       ? '<br><a class="result-link" href="' + escapeHtml(b.website) + '" target="_blank" rel="noopener noreferrer">Åbn hjemmeside</a>'
       : "";
     const analyzeButton = (realBusinessMode && b.website)
-      ? '<br><button type="button" class="popup-analyze" data-business-id="' + escapeHtml(b.id) + '">Analyser SEO</button>' +
+      ? '<br><span style="display:block;margin-top:6px;font-size:12px;color:#a8b6ce">' + escapeHtml(b.analysisStatus || (typeof b.score === "number" ? "SEO-analyse klar" : "Automatisk analyse afventer")) + '</span>' +
         '<br><button type="button" class="popup-monitor" data-business-id="' + escapeHtml(b.id) + '">' +
-        (b.isMonitored ? 'Kør SEO-kontrol nu' : 'Start SEO-overvågning') + '</button>' +
+        (b.isMonitored ? 'Kør SEO-kontrol nu' : 'Aktivér periodisk overvågning') + '</button>' +
         '<br><span class="popup-action-status" data-status-id="' + escapeHtml(b.id) + '" style="display:block;margin-top:6px;font-size:12px;color:#a8b6ce"></span>'
       : "";
     const contact = [
@@ -580,7 +583,7 @@ function render() {
       '<b>' + escapeHtml(b.name) + '</b>' +
       '<span class="muted">' + escapeHtml(b.city) + ' · ' + escapeHtml(b.industry) + '</span>' +
       '<div class="score" style="color:' + color(b.score) + '">' +
-        (typeof b.score === "number" ? (realBusinessMode ? 'SEO-score: ' : 'Demo SEO-score: ') + b.score + '/100' : 'SEO-score: Ikke analyseret') +
+        (typeof b.score === "number" ? (realBusinessMode ? 'SEO-score: ' : 'Demo SEO-score: ') + b.score + '/100' : 'SEO-score: ' + (realBusinessMode ? escapeHtml(b.analysisStatus || 'Afventer automatisk analyse') : 'Ikke analyseret')) +
       '</div>' +
     '</div>'
   ).join("") || '<p class="muted">Ingen resultater fundet.</p>';
@@ -622,6 +625,128 @@ document.getElementById("reset").addEventListener("click",() => {
 });
 
 
+// Automatisk SEO-kø: analyserer virksomheder sekventielt for at begrænse belastning og API-kald.
+let automaticQueueRunning = false;
+const automaticAnalysisInFlight = new Set();
+const automaticAnalysisDone = new Set();
+const AUTO_ANALYSIS_DELAY_MS = 1200;
+
+function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+function setAutomaticStatus(message) {
+  const target = document.getElementById("autoAnalysisStatus");
+  if (target) target.textContent = message;
+}
+
+async function ensureBusinessMonitoring(business) {
+  if (!business.website || business.isMonitored) return;
+  const response = await fetch(API_BASE + "/api/monitor", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: business.website })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || "Kunne ikke aktivere automatisk overvågning.");
+  business.monitorId = payload.id;
+  business.isMonitored = true;
+}
+
+async function analyzeBusinessAutomatically(business) {
+  if (!business || !business.website) return "no-website";
+  const key = websiteKey(business.website);
+  if (automaticAnalysisInFlight.has(key)) return "in-progress";
+  if (automaticAnalysisDone.has(key)) return "already-done";
+  if (typeof business.score === "number" && typeof business.performanceScore === "number") {
+    automaticAnalysisDone.add(key);
+    business.analysisStatus = "SEO-analyse klar";
+    return "cached";
+  }
+
+  automaticAnalysisInFlight.add(key);
+  business.analysisStatus = "Analyserer automatisk…";
+  render();
+  try {
+    // Hvis hjemmesiden allerede overvåges, genbrug den seneste måling først.
+    if (business.isMonitored && business.monitorId) {
+      const monitorResponse = await fetch(API_BASE + "/api/monitor/" + encodeURIComponent(business.monitorId), { cache: "no-store" });
+      if (monitorResponse.ok) {
+        const detail = await monitorResponse.json();
+        const latest = detail.latest || detail.site?.latest;
+        if (latest && typeof latest.seoScore === "number") {
+          business.score = latest.seoScore;
+          if (typeof latest.performanceScore === "number") business.performanceScore = latest.performanceScore;
+          business.fetchedAt = latest.fetchedAt || business.fetchedAt;
+          business.lastCheckedAt = detail.lastCheckedAt || business.lastCheckedAt;
+          business.analysisStatus = "SEO-analyse klar";
+          automaticAnalysisDone.add(key);
+          return "cached";
+        }
+      }
+    }
+
+    const response = await fetch(API_BASE + "/api/seo?url=" + encodeURIComponent(business.website));
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "SEO-analysen mislykkedes.");
+    business.score = typeof result.seoScore === "number" ? result.seoScore : null;
+    business.performanceScore = typeof result.performanceScore === "number" ? result.performanceScore : null;
+    business.fetchedAt = result.fetchedAt || new Date().toISOString();
+    business.analysisStatus = typeof business.score === "number" ? "SEO-analyse klar" : "Analyse uden score";
+
+    // Gem målingen via overvågningssystemet, så den kan genbruges og opdateres senere.
+    try {
+      await ensureBusinessMonitoring(business);
+    } catch (monitorError) {
+      console.warn("SEO-resultatet blev hentet, men overvågning kunne ikke aktiveres:", monitorError);
+    }
+    automaticAnalysisDone.add(key);
+    return "success";
+  } catch (error) {
+    business.analysisStatus = "Analyse fejlede – prøv igen ved næste søgning";
+    business.analysisError = error.message || "Ukendt fejl";
+    console.warn("Automatisk SEO-analyse fejlede for " + business.website + ":", error);
+    return "failed";
+  } finally {
+    automaticAnalysisInFlight.delete(key);
+    render();
+    if (selectedBusiness && selectedBusiness.website && websiteKey(selectedBusiness.website) === key) showBusinessDetails(selectedBusiness);
+  }
+}
+
+async function startAutomaticSeoQueue(businesses) {
+  if (automaticQueueRunning) {
+    setAutomaticStatus("En automatisk SEO-kø kører allerede. De nye virksomheder bliver behandlet, når den aktuelle kø er færdig.");
+    // Put newly discovered businesses at the end of the shared pending list.
+    for (const business of businesses) if (business.website && !automaticPendingQueue.includes(business)) automaticPendingQueue.push(business);
+    return;
+  }
+  for (const business of businesses) if (business.website && !automaticPendingQueue.includes(business)) automaticPendingQueue.push(business);
+  if (!automaticPendingQueue.length) {
+    setAutomaticStatus("Ingen af de fundne virksomheder har en registreret hjemmeside, der kan analyseres.");
+    return;
+  }
+  automaticQueueRunning = true;
+  let completed = 0, failed = 0, skipped = 0;
+  const total = automaticPendingQueue.length;
+  setAutomaticStatus("Automatisk SEO-analyse starter for " + total + " hjemmesider. Du kan fortsat bruge kortet imens.");
+  try {
+    while (automaticPendingQueue.length) {
+      const business = automaticPendingQueue.shift();
+      if (!business || !business.website) continue;
+      setAutomaticStatus("Analyserer " + (completed + failed + skipped + 1) + " af " + total + ": " + business.name + "…");
+      const result = await analyzeBusinessAutomatically(business);
+      if (result === "failed") failed++;
+      else if (result === "success") completed++;
+      else skipped++;
+      await wait(AUTO_ANALYSIS_DELAY_MS);
+    }
+  } finally {
+    automaticQueueRunning = false;
+    setAutomaticStatus("Automatisk SEO-kø færdig. Nye analyser: " + completed + ", genbrugte/allerede analyserede: " + skipped + ", fejl: " + failed + ".");
+  }
+}
+
+const automaticPendingQueue = [];
+
 document.getElementById("businessSearchForm").addEventListener("submit", async event => {
   event.preventDefault();
   const city = document.getElementById("businessCity").value.trim();
@@ -652,8 +777,8 @@ document.getElementById("businessSearchForm").addEventListener("submit", async e
     render();
     await refreshMonitoredScores();
     map.fitBounds(L.latLngBounds(data.map(b => [b.lat,b.lng])), {padding:[25,25], maxZoom:12});
-    status.textContent = "Fandt " + data.length + " virksomheder nær " + (payload.searchedCity || city) +
-      ". Klik på en markør og vælg “Analyser SEO” for at måle hjemmesiden.";
+    status.textContent = "Fandt " + data.length + " virksomheder nær " + (payload.searchedCity || city) + ". SEO-analyser starter automatisk i baggrunden.";
+    startAutomaticSeoQueue(data);
   } catch (error) {
     status.textContent = error.message || "Der opstod en fejl ved virksomhedssøgningen.";
   } finally {
