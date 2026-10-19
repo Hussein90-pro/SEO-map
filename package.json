@@ -1,7 +1,6 @@
-
 {
   "name": "seo-map-api",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Backend for SEO Map",
   "main": "server.js",
   "scripts": {
