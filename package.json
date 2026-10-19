@@ -1,13 +1,13 @@
-
 {
   "name": "seo-map-api",
-  "version": "1.0.0",
-  "description": "Backend for SEO Map",
+  "version": "1.1.0",
+  "description": "Backend for SEO Map with persistent PostgreSQL monitoring",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
   }
 }
