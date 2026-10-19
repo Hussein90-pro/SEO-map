@@ -495,7 +495,7 @@ function showBusinessDetails(business) {
     if (monitorStatus) {
       monitorStatus.textContent = business.isMonitored
         ? "Overvågning aktiv · seneste måling: " + (business.fetchedAt ? new Date(business.fetchedAt).toLocaleString("da-DK") : "venter på første måling")
-        : "Når overvågningen er startet, opdateres score og markørfarve efter nye målinger.";
+        : "Periodisk overvågning er valgfri og bruges til senere målinger og historik.";
     }
   } else {
     const monitorStatus = document.getElementById("monitorStatus");
@@ -561,7 +561,7 @@ function render() {
     const analyzeButton = (realBusinessMode && b.website)
       ? '<br><span style="display:block;margin-top:6px;font-size:12px;color:#a8b6ce">' + escapeHtml(b.analysisStatus || (typeof b.score === "number" ? "SEO-analyse klar" : "Automatisk analyse afventer")) + '</span>' +
         '<br><button type="button" class="popup-monitor" data-business-id="' + escapeHtml(b.id) + '">' +
-        (b.isMonitored ? 'Kør SEO-kontrol nu' : 'Aktivér periodisk overvågning') + '</button>' +
+        (b.isMonitored ? 'Kør SEO-kontrol nu' : 'Aktivér overvågning (valgfrit)') + '</button>' +
         '<br><span class="popup-action-status" data-status-id="' + escapeHtml(b.id) + '" style="display:block;margin-top:6px;font-size:12px;color:#a8b6ce"></span>'
       : "";
     const contact = [
@@ -701,7 +701,7 @@ async function analyzeBusinessAutomatically(business) {
     automaticAnalysisDone.add(key);
     return "success";
   } catch (error) {
-    business.analysisStatus = "Analyse fejlede – prøv igen ved næste søgning";
+    business.analysisStatus = "Analyse fejlede";
     business.analysisError = error.message || "Ukendt fejl";
     console.warn("Automatisk SEO-analyse fejlede for " + business.website + ":", error);
     return "failed";
@@ -741,7 +741,7 @@ async function startAutomaticSeoQueue(businesses) {
     }
   } finally {
     automaticQueueRunning = false;
-    setAutomaticStatus("Automatisk SEO-kø færdig. Nye analyser: " + completed + ", genbrugte/allerede analyserede: " + skipped + ", fejl: " + failed + ".");
+    setAutomaticStatus("Automatisk SEO-kø færdig. Nye analyser: " + completed + ", genbrugte/allerede analyserede: " + skipped + ", fejl: " + failed + "." + (failed ? " Åbn en virksomhed for at se fejlen, eller kontrollér Render-loggen." : ""));
   }
 }
 
@@ -777,7 +777,7 @@ document.getElementById("businessSearchForm").addEventListener("submit", async e
     render();
     await refreshMonitoredScores();
     map.fitBounds(L.latLngBounds(data.map(b => [b.lat,b.lng])), {padding:[25,25], maxZoom:12});
-    status.textContent = "Fandt " + data.length + " virksomheder nær " + (payload.searchedCity || city) + ". SEO-analyser starter automatisk i baggrunden.";
+    status.textContent = "Fandt " + data.length + " virksomheder nær " + (payload.searchedCity || city) + ". SEO-analyser starter automatisk i baggrunden; periodisk overvågning er valgfri.";
     startAutomaticSeoQueue(data);
   } catch (error) {
     status.textContent = error.message || "Der opstod en fejl ved virksomhedssøgningen.";
