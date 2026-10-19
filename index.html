@@ -71,7 +71,7 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
 
   <section class="panel" style="margin-bottom:16px" aria-labelledby="businessSearchHeading">
     <h2 id="businessSearchHeading">Find rigtige virksomheder</h2>
-    <p class="sub">Søg på en by, fx Aarhus, København eller London. Vi finder virksomheder med registrerede hjemmesider i OpenStreetMap.</p>
+    <p class="sub">Søg på en by, fx Aarhus, København eller London. Åbn en virksomheds markør for at analysere SEO eller starte en overvågning.</p>
     <form id="businessSearchForm">
       <div class="controls">
         <input id="businessCity" type="text" placeholder="Søg efter by, fx Aarhus eller London" aria-label="By til virksomhedssøgning" required>
@@ -153,7 +153,7 @@ footer{padding:24px 0;color:#8494ae;font-size:12px}
     <p id="monitorStatus" class="status" role="status" aria-live="polite">SEO-overvågning er ikke startet.</p>
     <div class="detail-actions" id="detailActions"></div>
   </section>
-  <footer>SEO MAP · Prototype v0.4 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
+  <footer>SEO MAP · Prototype v0.8 · Kortdata © OpenStreetMap · SEO-analyse via Google PageSpeed Insights</footer>
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -231,54 +231,6 @@ async function startMonitoring(business, button) {
     if (button) {
       button.disabled = false;
       button.textContent = "Prøv at starte overvågning igen";
-    }
-  }
-}
-
-
-async function runManualMonitorCheck(business, button) {
-  if (!business || !business.monitorId) {
-    const status = document.getElementById("monitorStatus");
-    if (status) status.textContent = "Hjemmesiden er ikke registreret til overvågning endnu.";
-    return;
-  }
-  const status = document.getElementById("monitorStatus");
-  if (button) {
-    button.disabled = true;
-    button.textContent = "Kontrollerer...";
-  }
-  if (status) status.textContent = "Kører en ny SEO-kontrol. Det kan tage lidt tid...";
-  try {
-    const response = await fetch(API_BASE + "/api/monitor/" + encodeURIComponent(business.monitorId) + "/check", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" }
-    });
-    let payload;
-    try { payload = await response.json(); } catch { payload = {}; }
-    if (!response.ok) throw new Error(payload.error || "Den manuelle SEO-kontrol mislykkedes.");
-    await refreshMonitoredScores();
-    // Also refresh the selected business profile from the monitor details endpoint
-    // in case the list endpoint is cached or has a reduced response shape.
-    const detailResponse = await fetch(API_BASE + "/api/monitor/" + encodeURIComponent(business.monitorId), { cache: "no-store" });
-    if (detailResponse.ok) {
-      const detail = await detailResponse.json();
-      const latest = detail.latest || (detail.site && detail.site.latest);
-      if (latest) {
-        if (typeof latest.seoScore === "number") business.score = latest.seoScore;
-        if (typeof latest.performanceScore === "number") business.performanceScore = latest.performanceScore;
-        if (latest.fetchedAt) business.fetchedAt = latest.fetchedAt;
-      }
-    }
-    render();
-    if (status) status.textContent = "SEO-kontrol gennemført. Seneste måling: " +
-      (business.fetchedAt ? new Date(business.fetchedAt).toLocaleString("da-DK") : "tidspunkt ikke oplyst") + ".";
-    showBusinessDetails(business);
-  } catch (error) {
-    if (status) status.textContent = error.message || "Kunne ikke gennemføre SEO-kontrollen.";
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.textContent = "Kør SEO-kontrol nu";
     }
   }
 }
@@ -402,13 +354,6 @@ function showBusinessDetails(business) {
     monitorButton.textContent = business.isMonitored ? "Opdater overvågning" : "Start SEO-overvågning";
     monitorButton.addEventListener("click", () => startMonitoring(business, monitorButton));
     actions.append(monitorButton);
-    if (business.isMonitored && business.monitorId) {
-      const checkButton = document.createElement("button");
-      checkButton.type = "button";
-      checkButton.textContent = "Kør SEO-kontrol nu";
-      checkButton.addEventListener("click", () => runManualMonitorCheck(business, checkButton));
-      actions.append(checkButton);
-    }
     const monitorStatus = document.getElementById("monitorStatus");
     if (monitorStatus) {
       monitorStatus.textContent = business.isMonitored
@@ -477,7 +422,9 @@ function render() {
       ? '<br><a class="result-link" href="' + escapeHtml(b.website) + '" target="_blank" rel="noopener noreferrer">Åbn hjemmeside</a>'
       : "";
     const analyzeButton = (realBusinessMode && b.website)
-      ? '<br><button type="button" class="popup-analyze" data-business-id="' + escapeHtml(b.id) + '">Analyser SEO</button>'
+      ? '<br><button type="button" class="popup-analyze" data-business-id="' + escapeHtml(b.id) + '">Analyser SEO</button>' +
+        '<br><button type="button" class="popup-monitor" data-business-id="' + escapeHtml(b.id) + '">' +
+        (b.isMonitored ? 'Kør SEO-kontrol nu' : 'Start SEO-overvågning') + '</button>'
       : "";
     const contact = [
       b.phone ? "Telefon: " + escapeHtml(b.phone) : "",
@@ -582,34 +529,59 @@ document.getElementById("businessSearchForm").addEventListener("submit", async e
 
 map.on("popupopen", event => {
   const popupNode = event.popup.getElement();
-  const button = popupNode && popupNode.querySelector(".popup-analyze");
-  if (!button || button.dataset.bound === "1") return;
-  button.dataset.bound = "1";
-  button.addEventListener("click", async () => {
-    const business = data.find(b => String(b.id) === button.dataset.businessId);
-    if (!business || !business.website) return;
-    button.disabled = true;
-    button.textContent = "Analyserer...";
+  if (!popupNode || popupNode.dataset.actionsBound === "1") return;
+  popupNode.dataset.actionsBound = "1";
+
+  popupNode.addEventListener("click", async eventClick => {
+    const button = eventClick.target.closest("button[data-business-id]");
+    if (!button) return;
+    eventClick.preventDefault();
+    eventClick.stopPropagation();
+
+    const business = data.find(item => String(item.id) === button.dataset.businessId);
+    if (!business || !business.website) {
+      document.getElementById("businessSearchStatus").textContent =
+        "Virksomheden har ingen registreret hjemmeside.";
+      return;
+    }
+
     const status = document.getElementById("businessSearchStatus");
-    status.textContent = "Analyserer " + business.name + "...";
+    button.disabled = true;
+
     try {
-      const response = await fetch(API_BASE + "/api/seo?url=" + encodeURIComponent(business.website));
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "SEO-analysen mislykkedes.");
-      business.score = result.seoScore;
-      business.performanceScore = result.performanceScore;
-      business.fetchedAt = result.fetchedAt;
-      render();
-      await startMonitoring(business, null);
-      showBusinessDetails(business);
-      const updated = markers.find(m => m.business === business);
-      if (updated) updated.marker.openPopup();
-      status.textContent = "SEO-analyse færdig for " + business.name + ": " +
-        (typeof business.score === "number" ? business.score + "/100" : "SEO-score ikke tilgængelig") + ".";
+      if (button.classList.contains("popup-analyze")) {
+        button.textContent = "Analyserer...";
+        status.textContent = "Analyserer " + business.name + "...";
+        const response = await fetch(API_BASE + "/api/seo?url=" + encodeURIComponent(business.website));
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "SEO-analysen mislykkedes.");
+        business.score = result.seoScore;
+        business.performanceScore = result.performanceScore;
+        business.fetchedAt = result.fetchedAt;
+        render();
+        await startMonitoring(business, null);
+        await refreshMonitoredScores();
+        showBusinessDetails(business);
+        status.textContent = "SEO-analyse færdig for " + business.name + ".";
+      } else if (button.classList.contains("popup-monitor")) {
+        if (business.isMonitored && business.monitorId) {
+          button.textContent = "Kontrollerer...";
+          await runManualMonitorCheck(business, button);
+        } else {
+          button.textContent = "Starter...";
+          await startMonitoring(business, button);
+          await refreshMonitoredScores();
+        }
+        showBusinessDetails(business);
+      }
     } catch (error) {
-      status.textContent = error.message || "Kunne ikke analysere virksomhedens hjemmeside.";
+      status.textContent = error.message || "Handlingen kunne ikke gennemføres.";
+    } finally {
       button.disabled = false;
-      button.textContent = "Prøv SEO-analyse igen";
+      if (button.classList.contains("popup-analyze")) button.textContent = "Analyser SEO";
+      else if (button.classList.contains("popup-monitor")) {
+        button.textContent = business.isMonitored ? "Kør SEO-kontrol nu" : "Start SEO-overvågning";
+      }
     }
   });
 });
